@@ -301,18 +301,21 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
 
           <tbody className="divide-y">
             {items.map((c) => {
-              const idPill =
-                "inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200 hover:bg-blue-200";
+              const certified = isCertified(c);
+              const idPill = certified
+                ? "inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-gradient-to-r from-amber-200 to-yellow-300 text-amber-900 border-2 border-amber-400 hover:from-amber-300 hover:to-yellow-400 shadow-sm"
+                : "inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200 hover:bg-blue-200";
 
               return (
                 <tr key={c.id} className="hover:bg-gray-50 transition-colors">
-                  {/* ✅ ID cliccabile = Apri */}
+                  {/* ✅ ID cliccabile = Apri (DORATO se certificato) */}
                   <td className="p-3">
                     <Link
                       href={`/candidates/${c.displayId}`}
                       className={idPill}
-                      title="Apri scheda candidato"
+                      title={certified ? "🏆 CERTIFICATO - Apri scheda" : "Apri scheda candidato"}
                     >
+                      {certified && <span className="mr-1">🏆</span>}
                       {c.displayId}
                     </Link>
                   </td>
