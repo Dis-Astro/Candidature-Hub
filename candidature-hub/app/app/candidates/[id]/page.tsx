@@ -4,6 +4,7 @@ export const revalidate = 0;
 import { prisma } from "../../../lib/prisma";
 import type { Candidate, Interview, CvFile } from "@prisma/client";
 import { InterviewForm } from "../InterviewForm";
+import { ReviewNavigation } from "../ReviewNavigation";
 
 type Params = {
   id?: string;
@@ -95,7 +96,13 @@ export default async function DetailPage({ params, searchParams }: PageProps) {
     .interviews as Interview[];
 
   return (
-    <div className="p-4" suppressHydrationWarning>
+    <div className="p-4 space-y-4" suppressHydrationWarning>
+      {/* Barra navigazione "da valutare" */}
+      <ReviewNavigation
+        currentDisplayId={candidate.displayId}
+        candidateId={candidate.id}
+      />
+
       <InterviewForm
         candidate={
           candidate as Candidate & {
