@@ -228,3 +228,40 @@ model AuditLog {
   // Se nel progetto avevi altri campi sotto, dimmelo e li riallineo.
   @@map("audit_logs")
 }
+
+/// Configurazione sistema (singleton, key="main")
+model SystemConfig {
+  id        String   @id @default("main")
+  updatedAt DateTime @updatedAt
+
+  // NAS paths
+  nasPath       String @default("/mnt/nas_curriculum/mail2pdf")
+  processedPath String @default("/mnt/nas_curriculum/mail2pdf/processed")
+
+  // IMAP (mail2pdf)
+  imapHost    String @default("")
+  imapPort    Int    @default(993)
+  imapUser    String @default("")
+  imapPass    String @default("")
+  imapMailbox String @default("INBOX")
+  pollSeconds Int    @default(60)
+  postAction  String @default("move")
+  moveFolder  String @default("Processed")
+
+  // Retention GDPR
+  retentionDays Int @default(90)
+
+  // SMTP Alert
+  alertTo  String @default("")
+  smtpHost String @default("")
+  smtpPort Int    @default(587)
+  smtpUser String @default("")
+  smtpPass String @default("")
+
+  // Parser
+  parserTimerSec Int     @default(60)
+  ocrEnabled     Boolean @default(false)
+
+  @@map("system_config")
+}
+
