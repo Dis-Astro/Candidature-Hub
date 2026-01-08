@@ -46,3 +46,12 @@ candidature-hub/export/
 candidature-hub-backups/
 *.tgz
 *.tar.gz
+
+# ---- editor / backups ----
+*.bak
+*.bak.*
+*.save
+
+# ---- accidental junk ----
+app@*
+next

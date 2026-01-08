@@ -1,2 +1,0 @@
-Restart=no
-Environment=LANG=C.UTF-8 LC_ALL=C.UTF-8 PYTHONUTF8=1 PYTHONIOENCODING=UTF-8 DATABASE_URL=postgresql://candidature:strongpass@127.0.0.1:5432/candidature-hub WATCH_DIR=/mnt/nas_curriculum/mail2pdf
