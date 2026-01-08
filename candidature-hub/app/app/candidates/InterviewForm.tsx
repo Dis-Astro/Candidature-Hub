@@ -431,6 +431,9 @@ export function InterviewForm({
         </div>
       </section>
 
+      {/* === ALLEGATI CANDIDATO === */}
+      <AttachmentsSection candidateId={candidate.id} />
+
       {/* === CARD VERDE ULTIMO COLLOQUIO === */}
       {lastInterview && (
         <section className="rounded-xl border border-emerald-400 bg-emerald-50 p-4 space-y-3 overflow-hidden">
