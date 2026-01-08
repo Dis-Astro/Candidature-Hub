@@ -195,8 +195,20 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
       interviewed: true,
       discarded: true,
       _count: { select: { importEvents: true } },
+      // Per check "certificato" [SCEMO]
+      interviews: {
+        orderBy: { date: "desc" },
+        take: 1,
+        select: { notes: true },
+      },
     },
   });
+
+  // Helper: check se candidato è "certificato" (note contengono [SCEMO])
+  function isCertified(candidate: typeof items[0]): boolean {
+    const notes = candidate.interviews[0]?.notes || "";
+    return /\[SCEMO\]/i.test(notes);
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
