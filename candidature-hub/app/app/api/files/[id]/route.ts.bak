@@ -1,0 +1,93 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import type { NextRequest } from "next/server";
+import { prisma } from "../../../../lib/prisma";
+
+const DEFAULT_BASE_DIR = process.env.CV_BASE_DIR || "/mnt/nas_curriculum/mail2pdf";
+
+// Directory aggiuntive dove il parser sposta i file
+const FALLBACK_DIRS = [
+  "/mnt/nas_curriculum/mail2pdf/processed",
+  "/mnt/nas_curriculum/mail2pdf/Visionati",
+];
+
+function isUnderAllowedBase(p: string): boolean {
+  const candidates = [DEFAULT_BASE_DIR, ...FALLBACK_DIRS]
+    .map((d) => path.resolve(d));
+
+  const resolved = path.resolve(p);
+  return candidates.some((base) => resolved.startsWith(base));
+}
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const id = params.id;
+  if (!id) {
+    return new Response("ID mancante", { status: 400 });
+  }
+
+  // 1) record dal DB
+  const cv = await prisma.cvFile.findUnique({
+    where: { id },
+  });
+
+  if (!cv || !cv.path) {
+    return new Response("File non trovato", { status: 404 });
+  }
+
+  const rawPath = cv.path;
+  const isRelative = !path.isAbsolute(rawPath);
+  const baseDir = DEFAULT_BASE_DIR;
+
+  const primaryFullPath = isRelative ? path.join(baseDir, rawPath) : rawPath;
+
+  // nome file per i fallback
+  const fileName = path.basename(rawPath);
+
+  const candidatePaths: string[] = [primaryFullPath];
+
+  // Aggiungiamo i fallback nelle cartelle processed / Visionati
+  for (const dir of FALLBACK_DIRS) {
+    candidatePaths.push(path.join(dir, fileName));
+  }
+
+  // 2) proviamo i vari path finché ne troviamo uno leggibile
+  let fileBuffer: Buffer | null = null;
+  let usedPath: string | null = null;
+
+  for (const p of candidatePaths) {
+    if (!isUnderAllowedBase(p)) {
+      // sicurezza: ignoriamo path fuori dalle dir ammesse
+      continue;
+    }
+
+    try {
+      fileBuffer = await fs.readFile(p);
+      usedPath = p;
+      break;
+    } catch {
+      // continuiamo col prossimo
+    }
+  }
+
+  if (!fileBuffer || !usedPath) {
+    return new Response("File non leggibile", { status: 404 });
+  }
+
+  const finalName = path.basename(usedPath).toLowerCase();
+  let contentType = "application/octet-stream";
+  if (finalName.endsWith(".pdf")) {
+    contentType = "application/pdf";
+  }
+
+  return new Response(fileBuffer, {
+    status: 200,
+    headers: {
+      "Content-Type": contentType,
+      "Content-Disposition": `inline; filename="${finalName}"`,
+      "Content-Length": fileBuffer.byteLength.toString(),
+    },
+  });
+}

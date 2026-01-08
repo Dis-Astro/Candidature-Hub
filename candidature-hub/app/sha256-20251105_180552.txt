@@ -1,0 +1,2 @@
+e754cf0d09fa6136d27168176079c14a2befc73c4f8237d4d38ddd53927ab4b6  /opt/candidature-hub/export/candidature-hub-src-20251105_180552.tgz
+f5a64161e5f383f5a287b6af13ad9125a8e907e6c440881b7301304d1935fea3  /opt/candidature-hub/export/candidature-hub-ops-20251105_180552.tgz

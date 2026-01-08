@@ -1,0 +1,5 @@
+@import "tailwindcss";
+
+/* opzionale: piccoli reset */
+:root { color-scheme: light; }
+html, body { height: 100%; }
