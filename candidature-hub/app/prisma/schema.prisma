@@ -59,6 +59,7 @@ model Candidate {
   displayId Int @unique @default(autoincrement())
 
   cvFiles      CvFile[]
+  attachments  Attachment[]
   interviews   Interview[]
   importEvents ImportEvent[]
   tags         CandidateTag[]
@@ -67,6 +68,39 @@ model Candidate {
   @@index([mansione, rating])
   @@index([discarded])
   @@map("candidates")
+}
+
+/// Tipo allegato
+enum AttachmentType {
+  CV
+  AUDIO_COLLOQUIO
+  DOCUMENTO
+  IMMAGINE
+  NOTE
+  ALTRO
+}
+
+/// Allegati manuali candidato (audio colloqui, documenti, ecc.)
+model Attachment {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  filename String
+  mimeType String
+  size     Int
+  type     AttachmentType @default(ALTRO)
+
+  /// Path su NAS (es. /mnt/nas_curriculum/attachments/<candidateId>/<filename>)
+  path String
+
+  /// Chi ha caricato (userId o "system")
+  uploadedBy String @default("system")
+
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  candidateId String
+
+  @@index([candidateId, createdAt])
+  @@map("attachments")
 }
 
 model CvFile {
