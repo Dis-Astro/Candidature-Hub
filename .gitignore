@@ -63,3 +63,7 @@ next
 # Environment files
 *.env
 *.env.*
+
+# ---- emergent / local machine ----
+.emergent/
+.gitconfig
