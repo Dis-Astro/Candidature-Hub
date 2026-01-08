@@ -40,3 +40,9 @@ venv/
 *.swo
 .idea/
 .vscode/
+
+# ---- exports / backups (DO NOT COMMIT) ----
+candidature-hub/export/
+candidature-hub-backups/
+*.tgz
+*.tar.gz
