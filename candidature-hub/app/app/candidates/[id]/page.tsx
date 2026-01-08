@@ -97,10 +97,13 @@ export default async function DetailPage({ params, searchParams }: PageProps) {
 
   return (
     <div className="p-4 space-y-4" suppressHydrationWarning>
-      {/* Barra navigazione "da valutare" */}
+      {/* Barra navigazione "da valutare" + azioni */}
       <ReviewNavigation
         currentDisplayId={candidate.displayId}
         candidateId={candidate.id}
+        discarded={candidate.discarded}
+        rating={candidate.rating}
+        interviewed={candidate.interviewed}
       />
 
       <InterviewForm
