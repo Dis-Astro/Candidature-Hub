@@ -6,9 +6,10 @@ import { prisma } from "../../../../../lib/prisma";
  * 
  * Azioni rapide per valutazione:
  * - action: "discard" → imposta discarded=true
- * - action: "approve" → imposta rating=5 (shortlist minimo)
+ * - action: "approve" → imposta rating=5 (shortlist minimo), discarded=false
+ * - action: "restore" → ripristina "da valutare" (discarded=false, rating=null)
  * 
- * Body: { action: "discard" | "approve" }
+ * Body: { action: "discard" | "approve" | "restore" }
  */
 export async function POST(
   req: NextRequest,
@@ -41,9 +42,17 @@ export async function POST(
     if (action === "approve") {
       await prisma.candidate.update({
         where: { id: candidate.id },
-        data: { rating: 5, updatedAt: new Date() }, // Rating minimo per shortlist
+        data: { rating: 5, discarded: false, updatedAt: new Date() },
       });
       return NextResponse.json({ ok: true, action: "approved", displayId: candidate.displayId });
+    }
+
+    if (action === "restore") {
+      await prisma.candidate.update({
+        where: { id: candidate.id },
+        data: { discarded: false, rating: null, updatedAt: new Date() },
+      });
+      return NextResponse.json({ ok: true, action: "restored", displayId: candidate.displayId });
     }
 
     return NextResponse.json({ error: "Azione non valida" }, { status: 400 });
