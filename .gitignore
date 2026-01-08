@@ -67,3 +67,4 @@ next
 # ---- emergent / local machine ----
 .emergent/
 .gitconfig
+!**/.env.example
