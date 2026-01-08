@@ -1,0 +1,21 @@
+# Node / Next
+node_modules
+.next
+.env
+.env.*
+npm-debug.log*
+pnpm-lock.yaml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# PDF / NAS
+/mnt/nas_curriculum/
+
+# Logs
+*.log
+
+# Prisma
+prisma/migrations
