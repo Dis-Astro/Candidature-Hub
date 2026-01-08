@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Candidature Hub — Parser PDF (robusto, UTF-8, per-file TX)
+- SHA1 dedup su cv_files
+- Estrazione testo (pypdf -> pdfminer)
+- Heuristics: email, telefono, nome/cognome (fallback da email)
+- Commit per file; su errore: rollback e import_event in conn separata
+"""
+
+import os, sys, time, hashlib, re, subprocess, uuid
+from typing import Optional, Tuple
+import psycopg2, psycopg2.extras
+
+# stdout/stderr UTF-8 safe
+# --- stdout/stderr UTF-8 safe ---
+# --- stdout/stderr UTF-8 safe ---
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+            txt = "\n".join(chunks)
+    except Exception:
+        txt = ""
+
+    # pdfminer fallback
+    if not txt and 'pdfminer_extract_text' in globals() and pdfminer_extract_text:
+        try:
+            txt = pdfminer_extract_text(pdf_path) or ""
+        except Exception:
+            txt = ""
+
+    try:
+        return (txt or "").encode("utf-8","replace").decode("utf-8")
+    except Exception:
+        return ""
+
+if not DATABASE_URL:
+    try:
+        out = subprocess.check_output(
+            ["bash","-lc","systemctl cat app.service | sed -n 's/^[[:space:]]*Environment=DATABASE_URL=//p' | head -n1"],
+            text=True
+        )
+    except Exception:
+
+if not DATABASE_URL:
+    print("[FATAL] DATABASE_URL non impostata; export DATABASE_URL=... o valorizzala in app.service", file=sys.stderr
+    sys.exit(1)
+# === UTF-8 helper e variabili ===
+def _safe(s: str) -> str:
+    try:
+        return (s or "").encode("utf-8","replace").decode("utf-8")
+    except Exception:
+        return "<?>"
+
+WATCH_DIR = os.environ.get("WATCH_DIR", "/mnt/nas_curriculum/mail2pdf")
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+# Fallback: leggi dal service app.service se non presente
+if not DATABASE_URL:
+    try:
+        out = subprocess.check_output(
+            ["bash","-lc","systemctl cat app.service | sed -n 's/^[[:space:]]*Environment=DATABASE_URL=//p' | head -n1"],
+            text=True
+        )
+        DATABASE_URL = (out or "").strip() or None
+    except Exception:
+        DATABASE_URL = None
+
+if not DATABASE_URL:
+    print("[FATAL] DATABASE_URL non impostata; export DATABASE_URL=... o valorizzala in app.service", file=sys.stderr
+    sys.exit(1)
+

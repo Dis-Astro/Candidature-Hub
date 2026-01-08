@@ -1,0 +1,19 @@
+[Unit]
+Description=Candidature Hub — Next.js app
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/candidature-hub/app
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=DATABASE_URL=postgresql://candidature:strongpass@127.0.0.1:5432/candidature-hub
+ExecStart=/usr/bin/pnpm start
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/candidature-hub/app.log
+StandardError=append:/var/log/candidature-hub/app.err.log
+
+[Install]
+WantedBy=multi-user.target

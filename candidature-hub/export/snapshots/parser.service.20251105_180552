@@ -1,0 +1,16 @@
+[Unit]
+Description=Candidature Hub — Parser worker
+RequiresMountsFor=/mnt/nas_curriculum
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/candidature-hub/parser
+Environment=WATCH_DIR=/mnt/nas_curriculum/mail2pdf
+Environment=DATABASE_URL=postgresql://candidature:strongpass@127.0.0.1:5432/candidature-hub
+ExecStart=/opt/candidature-hub/.venv-parser/bin/python /opt/candidature-hub/parser/parser.py
+User=parser
+Group=parser
+Restart=no
+StandardOutput=append:/var/log/candidature-hub/parser.out.log
+StandardError=append:/var/log/candidature-hub/parser.err.log

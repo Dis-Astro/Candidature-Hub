@@ -1,0 +1,4 @@
+imapclient
+python-dotenv
+xhtml2pdf
+beautifulsoup4

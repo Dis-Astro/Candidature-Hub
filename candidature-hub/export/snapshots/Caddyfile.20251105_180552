@@ -1,0 +1,18 @@
+:80, http://127.0.0.1, http://192.168.0.176 {
+  encode gzip
+
+  @root path /
+  redir @root /candidates 302
+
+  basicauth /* {
+    admin a4.Zog3E2QsYA7yjOYnQPEc/pXXeGCV.zHYBSaizHgvx0yTa
+  }
+
+  reverse_proxy 127.0.0.1:3000
+
+  header {
+    X-Frame-Options "SAMEORIGIN"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "strict-origin-when-cross-origin"
+  }
+}

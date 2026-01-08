@@ -1,0 +1,12 @@
+v20.19.5
+10.20.0
+perl: warning: Setting locale failed.
+perl: warning: Please check that your locale settings:
+	LANGUAGE = (unset),
+	LC_ALL = (unset),
+	LANG = "en_US.UTF-8"
+    are supported and installed on your system.
+perl: warning: Falling back to the standard locale ("C").
+psql (PostgreSQL) 15.14 (Debian 15.14-0+deb12u1)
+DATABASE_URL points to local 127.0.0.1:5432/candidature-hub
+App dir: /opt/candidature-hub/app  | Parser dir: /opt/candidature-hub/parser
