@@ -420,7 +420,7 @@ export function InterviewForm({
             {certified && (
               <div className="mt-1">
                 <img
-                  src="/Scemo.png"
+                  src="/logo.png"
                   alt="Certificazione 100% scemo"
                   className="w-20 h-20 object-contain drop-shadow-md"
                 />
