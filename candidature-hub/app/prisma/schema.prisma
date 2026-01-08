@@ -169,8 +169,8 @@ model ImportEvent {
   message   String?      @db.Text
   resend    Boolean      @default(false)
 
-  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  candidateId String
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  candidateId String?
 
   cvFile   CvFile? @relation(fields: [cvFileId], references: [id], onDelete: SetNull)
   cvFileId String?
