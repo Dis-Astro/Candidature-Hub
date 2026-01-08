@@ -55,3 +55,7 @@ candidature-hub-backups/
 # ---- accidental junk ----
 app@*
 next
+-e 
+# Environment files
+*.env
+*.env.*
