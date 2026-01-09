@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { Candidate, Interview, CvFile } from "@prisma/client";
 import { saveInterviewAction, updateCandidateAction } from "./detail/actions";
 import { AttachmentsSection } from "./AttachmentsSection";
+import { QuickActions } from "./QuickActions";
 
 type CandidateWithRelations = Candidate & {
   interviews: Interview[];
