@@ -257,57 +257,52 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
 
       <FilterForm />
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between text-sm text-slate-500">
         <PageSizeSelector currentPageSize={pageSize} />
-        <div className="text-sm text-gray-600">
-          Pagina {page} di {totalPages}
-        </div>
+        <span>Pagina {page} di {totalPages}</span>
       </div>
 
-      <div className="overflow-x-auto border rounded-lg">
+      <div className="overflow-x-auto bg-white border border-slate-200 rounded-xl shadow-sm">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b">
+          <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th className="p-3 text-left font-semibold">ID</th>
-
-              <th className="p-3 text-left font-semibold">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">ID</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
                 <HeaderLink field="interviewed" label="Colloquio" />
               </th>
-
-              <th className="p-3 text-left font-semibold">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
                 <HeaderLink field="lastName" label="Cognome" />
               </th>
-              <th className="p-3 text-left font-semibold">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
                 <HeaderLink field="firstName" label="Nome" />
               </th>
-              <th className="p-3 text-left font-semibold">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
                 <HeaderLink field="mansione" label="Mansione" />
               </th>
-              <th className="p-3 text-left font-semibold">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
                 <HeaderLink field="rating" label="Rating" />
               </th>
-              <th className="p-3 text-left font-semibold">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
                 <HeaderLink field="updatedAt" label="Aggiornato" />
               </th>
-              <th className="p-3 text-left font-semibold">Invii</th>
-
-              <th className="p-3 text-left font-semibold">
-                <HeaderLink field="discarded" label="Curriculum scartato" />
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Invii</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                <HeaderLink field="discarded" label="Scartato" />
               </th>
             </tr>
           </thead>
 
-          <tbody className="divide-y">
+          <tbody className="divide-y divide-slate-100">
             {items.map((c) => {
               const certified = isCertified(c);
               const idPill = certified
-                ? "inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-gradient-to-r from-amber-200 to-yellow-300 text-amber-900 border-2 border-amber-400 hover:from-amber-300 hover:to-yellow-400 shadow-sm"
-                : "inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200 hover:bg-blue-200";
+                ? "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-gradient-to-r from-amber-200 to-yellow-300 text-amber-900 border border-amber-400 hover:from-amber-300 hover:to-yellow-400 shadow-sm transition-all"
+                : "inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all";
 
               return (
-                <tr key={c.id} className="hover:bg-gray-50 transition-colors">
-                  {/* ✅ ID cliccabile = Apri (DORATO se certificato) */}
-                  <td className="p-3">
+                <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
+                  {/* ID (DORATO se certificato) */}
+                  <td className="px-4 py-3">
                     <Link
                       href={`/candidates/${c.displayId}`}
                       className={idPill}
