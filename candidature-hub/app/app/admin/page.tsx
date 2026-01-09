@@ -534,6 +534,159 @@ export default function AdminPage() {
         </div>
       </section>
 
+      {/* Configurazione Database */}
+      <section className="border rounded-lg p-4 space-y-4">
+        <div>
+          <h2 className="font-semibold text-lg">Configurazione Database</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            Configura un database PostgreSQL esterno invece di quello locale.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            id="useExternalDb"
+            checked={config.useExternalDb}
+            onChange={(e) => update("useExternalDb", e.target.checked)}
+            className="h-5 w-5"
+          />
+          <label htmlFor="useExternalDb" className="text-sm font-medium text-gray-700">
+            Usa database esterno
+          </label>
+        </div>
+
+        {config.useExternalDb && (
+          <>
+            <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-700 font-medium">
+                ⚠️ ATTENZIONE: la password è salvata in chiaro nella configurazione.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Host</label>
+                <input
+                  className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
+                  value={config.extDbHost}
+                  onChange={(e) => update("extDbHost", e.target.value)}
+                  placeholder="localhost"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Porta</label>
+                <input
+                  type="number"
+                  className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
+                  value={config.extDbPort}
+                  onChange={(e) => update("extDbPort", Number(e.target.value))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Nome DB</label>
+                <input
+                  className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
+                  value={config.extDbName}
+                  onChange={(e) => update("extDbName", e.target.value)}
+                  placeholder="candidature_hub"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Utente</label>
+                <input
+                  className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
+                  value={config.extDbUser}
+                  onChange={(e) => update("extDbUser", e.target.value)}
+                  placeholder="postgres"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Password</label>
+                <input
+                  type="password"
+                  className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
+                  value={config.extDbPass}
+                  onChange={(e) => update("extDbPass", e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2 pt-5">
+                <input
+                  type="checkbox"
+                  id="extDbSsl"
+                  checked={config.extDbSsl}
+                  onChange={(e) => update("extDbSsl", e.target.checked)}
+                  className="h-4 w-4"
+                />
+                <label htmlFor="extDbSsl" className="text-sm text-gray-700">
+                  Richiedi connessione SSL
+                </label>
+              </div>
+            </div>
+
+            <div className="flex gap-3 items-start">
+              <button
+                type="button"
+                onClick={async () => {
+                  setTestingDb(true);
+                  setDbTestResult(null);
+                  try {
+                    const res = await fetch("/api/admin/test-db", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        host: config.extDbHost,
+                        port: config.extDbPort,
+                        dbname: config.extDbName,
+                        user: config.extDbUser,
+                        password: config.extDbPass === "********" ? "" : config.extDbPass,
+                        ssl: config.extDbSsl,
+                      }),
+                    });
+                    const data = await res.json();
+                    setDbTestResult({
+                      ok: data.ok,
+                      message: data.ok ? data.message : data.error,
+                      details: data.details,
+                    });
+                  } catch (e) {
+                    setDbTestResult({ ok: false, message: String(e) });
+                  } finally {
+                    setTestingDb(false);
+                  }
+                }}
+                disabled={testingDb || !config.extDbHost || !config.extDbName || !config.extDbUser}
+                className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+              >
+                {testingDb ? "Test in corso..." : "Test Connessione"}
+              </button>
+
+              {dbTestResult && (
+                <div className={`flex-1 p-3 rounded-md text-sm ${dbTestResult.ok ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                  <p className="font-medium">{dbTestResult.ok ? "✅" : "❌"} {dbTestResult.message}</p>
+                  {dbTestResult.details && (
+                    <p className="text-xs mt-1 opacity-80">
+                      {dbTestResult.details.version} • DB: {dbTestResult.details.database} • User: {dbTestResult.details.user}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {config.useExternalDb && (
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+            <p className="text-sm text-blue-800 font-medium">
+              ℹ️ Dopo aver salvato, per applicare le modifiche riavvia i servizi:
+            </p>
+            <code className="block mt-2 p-2 bg-white rounded text-xs font-mono">
+              sudo systemctl restart app.service parser.service
+            </code>
+          </div>
+        )}
+      </section>
+
       {/* Salva */}
       <div className="flex justify-end pt-4">
         <button
