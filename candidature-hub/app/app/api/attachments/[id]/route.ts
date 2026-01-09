@@ -3,6 +3,23 @@ import { prisma } from "../../../../lib/prisma";
 import { readFile, unlink } from "fs/promises";
 import { existsSync } from "fs";
 
+// Log audit
+async function logAudit(action: string, entity: string, entityId?: string, details?: string) {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        action,
+        entity,
+        entityId: entityId || null,
+        details: details || null,
+        userId: null,
+      },
+    });
+  } catch (e) {
+    console.error("[AuditLog] Failed to log:", e);
+  }
+}
+
 /**
  * GET /api/attachments/[id]
  * Download allegato
@@ -28,10 +45,13 @@ export async function GET(
 
     const buffer = await readFile(attachment.path);
 
+    // Sanitizza filename per header (evita injection)
+    const safeFilename = attachment.filename.replace(/["\r\n]/g, "_");
+
     return new NextResponse(buffer, {
       headers: {
         "Content-Type": attachment.mimeType,
-        "Content-Disposition": `inline; filename="${attachment.filename}"`,
+        "Content-Disposition": `inline; filename="${safeFilename}"`,
         "Content-Length": String(buffer.length),
       },
     });
@@ -54,6 +74,7 @@ export async function DELETE(
 
     const attachment = await prisma.attachment.findUnique({
       where: { id },
+      select: { id: true, filename: true, candidateId: true, path: true, size: true, type: true },
     });
 
     if (!attachment) {
@@ -68,7 +89,20 @@ export async function DELETE(
     // Elimina da DB
     await prisma.attachment.delete({ where: { id } });
 
-    return NextResponse.json({ ok: true });
+    // Audit log
+    await logAudit(
+      "ATTACHMENT_DELETE",
+      "Attachment",
+      attachment.id,
+      JSON.stringify({ 
+        candidateId: attachment.candidateId, 
+        filename: attachment.filename,
+        size: attachment.size,
+        type: attachment.type
+      })
+    );
+
+    return NextResponse.json({ ok: true, message: "Allegato eliminato" });
   } catch (e) {
     console.error("[API attachments/[id] DELETE] Error:", e);
     return NextResponse.json({ error: String(e) }, { status: 500 });
