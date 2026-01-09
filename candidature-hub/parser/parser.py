@@ -4,8 +4,9 @@
 """
 Candidature Hub — Parser PDF (UTF-8 safe, per-file TX)
 
-- Estrazione testo (pypdf -> pdfminer)
-- Heuristics: email, telefono, nome/cognome (filename, testo, email; fallback "N/D")
+- Estrazione testo (pypdf -> pdfminer -> OCR)
+- NER italiano (spaCy) per nome/cognome
+- Heuristics fallback: email, telefono, filename
 - Transazione per file; import_events sempre scritto con connessione separata
 - Ogni PDF crea SEMPRE un nuovo candidato
   → submissionIndex = progressivo per stesso nome + cognome
@@ -20,7 +21,7 @@ import subprocess
 import uuid
 import datetime
 import traceback
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 import psycopg2
 import psycopg2.extras
@@ -41,12 +42,33 @@ except Exception:
     PdfReader = None
 
 try:
-    from pdfminer_high_level import extract_text as pdfminer_extract_text  # type: ignore
+    from pdfminer.high_level import extract_text as pdfminer_extract_text
 except Exception:
+    pdfminer_extract_text = None
+
+# --- OCR (opzionale) ---
+try:
+    import pytesseract
+    from pdf2image import convert_from_path
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+    pytesseract = None
+    convert_from_path = None
+
+# --- NER spaCy (opzionale) ---
+NLP = None
+try:
+    import spacy
+    # Carica modello italiano (deve essere installato: python -m spacy download it_core_news_sm)
     try:
-        from pdfminer.high_level import extract_text as pdfminer_extract_text  # type: ignore
-    except Exception:
-        pdfminer_extract_text = None
+        NLP = spacy.load("it_core_news_sm")
+        print("[BOOT] spaCy NER italiano caricato", flush=True)
+    except OSError:
+        print("[WARN] Modello spaCy it_core_news_sm non trovato. Esegui: python -m spacy download it_core_news_sm", flush=True)
+        NLP = None
+except ImportError:
+    print("[WARN] spaCy non installato, NER disabilitato", flush=True)
 
 
 # === helpers UTF-8 ===
@@ -61,20 +83,17 @@ def _safe(s: str) -> str:
 WATCH_DIR = os.environ.get("WATCH_DIR", "/mnt/nas_curriculum/mail2pdf")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 PROCESSED_DIR = os.environ.get("PROCESSED_DIR", os.path.join(WATCH_DIR, "processed"))
+OCR_ENABLED = os.environ.get("OCR_ENABLED", "0") == "1"
+OCR_LANG = os.environ.get("OCR_LANG", "ita")  # tesseract language
+
 
 def _sanitize_filename(name: str) -> str:
-    """
-    Normalizza nomi file per evitare problemi su URL/FS (virgolette tipografiche, simboli, ecc).
-    Mantiene l'estensione .pdf se presente.
-    """
+    """Normalizza nomi file per evitare problemi su URL/FS."""
     import unicodedata
-    # normalizza unicode
     n = unicodedata.normalize("NFKD", name)
-    # sostituzioni comuni
-    n = (n.replace("“", '"').replace("”", '"')
-           .replace("’", "'").replace("‘", "'")
+    n = (n.replace(""", '"').replace(""", '"')
+           .replace("'", "'").replace("'", "'")
            .replace("–", "-").replace("—", "-"))
-    # solo caratteri "safe"
     out = []
     for ch in n:
         o = ord(ch)
@@ -83,19 +102,15 @@ def _sanitize_filename(name: str) -> str:
         elif ch in ["'", '"', ",", ";", ":", "+", "&", "@", "!"]:
             out.append("_")
         else:
-            # elimina caratteri strani / control
             if o < 32:
                 continue
             out.append("_")
     n = "".join(out)
-    # collassa spazi/underscore
     n = re.sub(r"[ \t]+", " ", n).strip()
     n = re.sub(r"_+", "_", n)
     n = re.sub(r"\s*_\s*", "_", n)
-    # evita nomi vuoti
     if not n:
         n = "file.pdf"
-    # estensione
     if not n.lower().endswith(".pdf"):
         n += ".pdf"
     return n
@@ -105,11 +120,8 @@ def _sanitize_filename(name: str) -> str:
 if not DATABASE_URL:
     try:
         out = subprocess.check_output(
-            [
-                "bash",
-                "-lc",
-                "systemctl cat app.service | sed -n 's/^[[:space:]]*Environment=DATABASE_URL=//p' | head -n1",
-            ],
+            ["bash", "-lc",
+             "systemctl cat app.service | sed -n 's/^[[:space:]]*Environment=DATABASE_URL=//p' | head -n1"],
             text=True,
         )
         DATABASE_URL = (out or "").strip() or None
@@ -117,16 +129,25 @@ if not DATABASE_URL:
         DATABASE_URL = None
 
 if not DATABASE_URL:
-    print(
-        "[FATAL] DATABASE_URL non impostata; export DATABASE_URL=... o valorizzala in app.service",
-        file=sys.stderr,
-    )
+    print("[FATAL] DATABASE_URL non impostata", file=sys.stderr)
     sys.exit(1)
 
 
 # === Regex & normalizzazioni ===
 RE_EMAIL = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.I)
 RE_PHONE = re.compile(r"(?:\+?\d[\d\-\s\.\/]{5,}\d)")
+
+# Parole da escludere come nome/cognome (comuni nei CV)
+EXCLUDED_WORDS = {
+    "curriculum", "vitae", "cv", "europass", "pdf", "doc", "docx",
+    "email", "telefono", "tel", "cell", "mobile", "indirizzo", "address",
+    "nato", "nata", "data", "nascita", "residenza", "domicilio",
+    "istruzione", "formazione", "esperienza", "lavoro", "competenze",
+    "skills", "lingua", "lingue", "patente", "hobby", "interessi",
+    "allegato", "allegati", "pagina", "page", "di", "del", "della",
+    "gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
+    "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre",
+}
 
 
 def normalize_email(s: Optional[str]) -> Optional[str]:
@@ -154,13 +175,65 @@ def pick_phone(text: str) -> Optional[str]:
     return normalize_phone(m.group(0)) if m else None
 
 
+def is_valid_name(name: str) -> bool:
+    """Verifica se una stringa è un nome valido (non parola comune CV)."""
+    if not name or len(name) < 2:
+        return False
+    if name.lower() in EXCLUDED_WORDS:
+        return False
+    # Solo lettere
+    if not re.match(r"^[A-Za-zÀ-ÿ\-\']+$", name):
+        return False
+    return True
+
+
+def extract_names_ner(text: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Estrae nome e cognome usando spaCy NER italiano.
+    Cerca entità PER (persona) nel testo.
+    """
+    if not NLP or not text:
+        return (None, None)
+    
+    # Limita testo per performance (primi 3000 caratteri)
+    doc = NLP(text[:3000])
+    
+    persons: List[str] = []
+    for ent in doc.ents:
+        if ent.label_ == "PER":
+            # Pulisci e valida
+            name = ent.text.strip()
+            # Rimuovi titoli comuni
+            name = re.sub(r"^(Sig\.|Sig\.ra|Dott\.|Dott\.ssa|Ing\.|Avv\.)\s*", "", name, flags=re.I)
+            if name and len(name.split()) >= 1:
+                persons.append(name)
+    
+    if not persons:
+        return (None, None)
+    
+    # Prendi la prima persona trovata
+    full_name = persons[0]
+    parts = full_name.split()
+    
+    if len(parts) >= 2:
+        fn = parts[0].capitalize()
+        ln = parts[-1].capitalize()
+        if is_valid_name(fn) and is_valid_name(ln):
+            return (fn, ln)
+    
+    if len(parts) == 1 and is_valid_name(parts[0]):
+        return (parts[0].capitalize(), None)
+    
+    return (None, None)
+
+
 def derive_names_from_email(email: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
     if not email:
         return (None, None)
     u = email.split("@", 1)[0]
     u = re.sub(r"[^a-zA-Z\.]+", " ", u)
     u = re.sub(r"\s+", " ", u).strip()
-    parts = [p for p in u.replace(".", " ").split(" ") if p]
+    parts = [p for p in u.replace(".", " ").split(" ") if p and is_valid_name(p)]
     if len(parts) >= 2:
         return (parts[0].capitalize(), parts[-1].capitalize())
     if len(parts) == 1:
@@ -169,35 +242,54 @@ def derive_names_from_email(email: Optional[str]) -> Tuple[Optional[str], Option
 
 
 def derive_names_from_filename(path: str) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Prova a estrarre Nome Cognome dal nome del file.
-    Funziona con pattern come:
-      * CV Tommaso Sammaciccia 03-25.pdf
-      * Gianni PIATTI - Telef_340xxxx.pdf
-      * ...__Antonio Ortenzi__CV Europass.pdf
-    """
+    """Estrae Nome Cognome dal nome del file."""
     base = os.path.basename(path)
     base = os.path.splitext(base)[0]
-
-    # Rendo più "pulito" il filename
-    cleaned = re.sub(r"[_\-\.]+", " ", base)     # _ - . → spazio
+    
+    cleaned = re.sub(r"[_\-\.]+", " ", base)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
-
-    # Cerco pattern Nome Cognome con iniziali maiuscole
+    
+    # Pattern Nome Cognome con iniziali maiuscole
     m = re.search(r"\b([A-Z][a-zA-Z]{1,30})\s+([A-Z][a-zA-Z]{1,30})\b", cleaned)
     if m:
         fn = m.group(1).capitalize()
         ln = m.group(2).capitalize()
-        return fn, ln
+        if is_valid_name(fn) and is_valid_name(ln):
+            return fn, ln
+    
+    return (None, None)
 
+
+def derive_names_from_text_heuristic(text: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Fallback heuristic: cerca pattern Nome Cognome nelle prime righe.
+    Migliore del semplice regex perché filtra parole comuni.
+    """
+    if not text:
+        return (None, None)
+    
+    # Cerca nelle prime 20 righe
+    lines = text.split("\n")[:20]
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        # Pattern: due o tre parole con iniziale maiuscola
+        m = re.match(r"^([A-Z][a-zA-ZÀ-ÿ]+)\s+([A-Z][a-zA-ZÀ-ÿ]+)(?:\s+([A-Z][a-zA-ZÀ-ÿ]+))?$", line)
+        if m:
+            parts = [p for p in m.groups() if p]
+            valid_parts = [p for p in parts if is_valid_name(p)]
+            if len(valid_parts) >= 2:
+                return (valid_parts[0].capitalize(), valid_parts[-1].capitalize())
+    
     return (None, None)
 
 
 # === DB ===
 def pg_connect():
-    conn = psycopg2.connect(
-        DATABASE_URL, cursor_factory=psycopg2.extras.DictCursor
-    )
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.DictCursor)
     try:
         conn.set_client_encoding("UTF8")
     except Exception:
@@ -211,7 +303,7 @@ def insert_import_event_newconn(
     candidateId: Optional[str] = None,
     cvFileId: Optional[str] = None,
 ):
-    """Scrive sempre un import_event con connessione separata (UTF-8 safe)."""
+    """Scrive sempre un import_event con connessione separata."""
     try:
         msg = _safe(message)
         c = pg_connect()
@@ -224,13 +316,7 @@ def insert_import_event_newconn(
                 cur2.execute(
                     'INSERT INTO import_events (id,"createdAt",status,message,"candidateId","cvFileId") '
                     "VALUES (%s, now(), %s, %s, %s, %s)",
-                    (
-                        "im_" + uuid.uuid4().hex[:24],
-                        status,
-                        msg,
-                        candidateId,
-                        cvFileId,
-                    ),
+                    ("im_" + uuid.uuid4().hex[:24], status, msg, candidateId, cvFileId),
                 )
             except Exception:
                 cur2.execute(
@@ -240,36 +326,79 @@ def insert_import_event_newconn(
                 )
         c.close()
     except Exception as e:
-        print(
-            f"[WARN] import_event(newconn) failed: {_safe(str(e))}",
-            file=sys.stderr,
-        )
+        print(f"[WARN] import_event(newconn) failed: {_safe(str(e))}", file=sys.stderr)
 
 
 # === PDF ===
-def extract_text_utf8(pdf_path: str) -> str:
-    txt = ""
-    # pypdf
+def extract_text_pypdf(pdf_path: str) -> str:
+    """Estrae testo con pypdf."""
+    if not PdfReader:
+        return ""
     try:
-        if PdfReader:
-            r = PdfReader(pdf_path)
-            chunks = []
-            for pg in r.pages:
-                try:
-                    chunks.append(pg.extract_text() or "")
-                except Exception:
-                    pass
-            txt = "\n".join(chunks)
+        r = PdfReader(pdf_path)
+        chunks = []
+        for pg in r.pages:
+            try:
+                chunks.append(pg.extract_text() or "")
+            except Exception:
+                pass
+        return "\n".join(chunks)
     except Exception:
-        txt = ""
+        return ""
 
-    # pdfminer fallback
-    if not txt and pdfminer_extract_text:
-        try:
-            txt = pdfminer_extract_text(pdf_path) or ""
-        except Exception:
-            txt = ""
 
+def extract_text_pdfminer(pdf_path: str) -> str:
+    """Estrae testo con pdfminer."""
+    if not pdfminer_extract_text:
+        return ""
+    try:
+        return pdfminer_extract_text(pdf_path) or ""
+    except Exception:
+        return ""
+
+
+def extract_text_ocr(pdf_path: str) -> str:
+    """
+    Estrae testo con OCR (tesseract).
+    Richiede: tesseract-ocr, tesseract-ocr-ita, poppler-utils
+    """
+    if not OCR_AVAILABLE or not OCR_ENABLED:
+        return ""
+    
+    try:
+        print(f"[OCR] Avvio OCR per {pdf_path}", flush=True)
+        images = convert_from_path(pdf_path, dpi=200)
+        
+        text_parts = []
+        for i, img in enumerate(images):
+            try:
+                text = pytesseract.image_to_string(img, lang=OCR_LANG)
+                text_parts.append(text)
+            except Exception as e:
+                print(f"[OCR] Errore pagina {i}: {e}", file=sys.stderr)
+        
+        return "\n".join(text_parts)
+    except Exception as e:
+        print(f"[OCR] Errore generale: {e}", file=sys.stderr)
+        return ""
+
+
+def extract_text_utf8(pdf_path: str) -> str:
+    """
+    Estrae testo da PDF con fallback multipli:
+    1. pypdf
+    2. pdfminer
+    3. OCR (se abilitato e testo vuoto)
+    """
+    txt = extract_text_pypdf(pdf_path)
+    
+    if not txt.strip():
+        txt = extract_text_pdfminer(pdf_path)
+    
+    # Se ancora vuoto e OCR abilitato, prova OCR
+    if not txt.strip() and OCR_ENABLED:
+        txt = extract_text_ocr(pdf_path)
+    
     try:
         return (txt or "").encode("utf-8", "replace").decode("utf-8")
     except Exception:
@@ -287,11 +416,11 @@ def file_sha1(path: str) -> str:
     return h.hexdigest()
 
 
-def move_to_processed(path: str) -> None:
-    """Sposta il file in PROCESSED_DIR/AAAA-MM/filename.pdf, gestendo i duplicati di nome."""
+def move_to_processed(path: str) -> str:
+    """Sposta il file in PROCESSED_DIR/AAAA-MM/filename.pdf. Ritorna nuovo path."""
     try:
         if not os.path.isfile(path):
-            return
+            return path
 
         ts = os.path.getmtime(path)
         dt = datetime.datetime.fromtimestamp(ts)
@@ -303,28 +432,22 @@ def move_to_processed(path: str) -> None:
         base = _sanitize_filename(os.path.basename(path))
         dest = os.path.join(target_dir, base)
 
-        # Gestione collisioni di nome file
         if os.path.exists(dest):
             root, ext = os.path.splitext(base)
             dest = os.path.join(target_dir, f"{root}__dup_{int(ts)}{ext}")
 
         os.rename(path, dest)
         print(f"[MOVE] {path} -> {dest}", flush=True)
+        return dest
     except FileNotFoundError:
-        return
+        return path
     except Exception as e:
-        print(
-            f"[WARN] move_to_processed({path}) failed: {_safe(str(e))}",
-            file=sys.stderr,
-        )
+        print(f"[WARN] move_to_processed({path}) failed: {_safe(str(e))}", file=sys.stderr)
+        return path
 
 
 def get_next_submission_index(conn, first_name: str, last_name: str) -> int:
-    """
-    Restituisce il prossimo submissionIndex per questo nome+cognome.
-      - nessun candidato => 1
-      - esistono già N candidati => N+1
-    """
+    """Restituisce il prossimo submissionIndex per questo nome+cognome."""
     with conn.cursor() as cur:
         cur.execute(
             '''
@@ -340,12 +463,7 @@ def get_next_submission_index(conn, first_name: str, last_name: str) -> int:
 
 
 def ensure_candidate(cur, email, phone, fn, ln):
-    """
-    SEMPRE nuovo candidato (anche se stessa email/telefono).
-    submissionIndex = progressivo per stesso nome+cognome (come prima).
-    """
-    import re, uuid
-
+    """SEMPRE nuovo candidato. submissionIndex = progressivo per stesso nome+cognome."""
     # fallback da email se non abbiamo nome/cognome
     if (not fn or not ln) and email:
         f2, l2 = derive_names_from_email(email)
@@ -378,14 +496,8 @@ def ensure_candidate(cur, email, phone, fn, ln):
     )
     return cand_id, int(sub_idx)
 
-def insert_cv_file(
-    cur,
-    candidateId: str,
-    path: str,
-    size: int,
-    sha1: str,
-    text: str,
-) -> str:
+
+def insert_cv_file(cur, candidateId: str, path: str, size: int, sha1: str, text: str) -> str:
     nid = "cvf_" + uuid.uuid4().hex[:24]
     cur.execute(
         'INSERT INTO cv_files (id,"createdAt",path,size,sha1,"extractedText","candidateId") '
@@ -405,7 +517,6 @@ def process_one_file(conn, path: str):
         except Exception:
             pass
 
-        # per-file savepoint
         cur.execute("SAVEPOINT onefile")
 
         st = os.stat(path)
@@ -421,70 +532,54 @@ def process_one_file(conn, path: str):
         fn: Optional[str] = None
         ln: Optional[str] = None
 
-        # 1) prova da testo (Nome Cognome)
-        m = re.search(
-            r"\b([A-Z][a-zA-Z]{1,30})\s+([A-Z][a-zA-Z]{1,30})\b",
-            text,
-        )
-        if m:
-            fn, ln = m.group(1), m.group(2)
+        # 1) NER spaCy (priorità)
+        if NLP:
+            fn, ln = extract_names_ner(text)
+            if fn and ln:
+                print(f"[NER] Nome trovato: {fn} {ln}", flush=True)
 
-        # 2) fallback: prova dal filename
+        # 2) Heuristic da testo (prime righe)
         if not fn or not ln:
-            fn2, ln2 = derive_names_from_filename(path)
+            fn2, ln2 = derive_names_from_text_heuristic(text)
             if fn2 or ln2:
                 fn = fn or fn2
                 ln = ln or ln2
+                print(f"[HEUR] Nome da testo: {fn} {ln}", flush=True)
+
+        # 3) Fallback: dal filename
+        if not fn or not ln:
+            fn3, ln3 = derive_names_from_filename(path)
+            if fn3 or ln3:
+                fn = fn or fn3
+                ln = ln or ln3
+                print(f"[FILE] Nome da filename: {fn} {ln}", flush=True)
 
         email = normalize_email(email)
         phone = normalize_phone(phone)
 
-        print(f"[PROC] dati grezzi: fn={fn}, ln={ln}, email={email}, phone={phone}", flush=True)
+        print(f"[PROC] dati finali: fn={fn}, ln={ln}, email={email}, phone={phone}", flush=True)
 
-        # 👉 crea SEMPRE un nuovo candidato
+        # Crea nuovo candidato
         cand_id, sub_idx = ensure_candidate(cur, email, phone, fn, ln)
-        print(
-            f"[CAND] creato candidato id={cand_id} name={fn or 'N/D'} {ln or 'N/D'} submissionIndex={sub_idx}",
-            flush=True,
-        )
+        print(f"[CAND] creato candidato id={cand_id} name={fn or 'N/D'} {ln or 'N/D'} submissionIndex={sub_idx}", flush=True)
 
-        # nuovo CV legato a quel candidato
+        # Nuovo CV
         cvf_id = insert_cv_file(cur, cand_id, path, st.st_size, sha1, text)
-        print(
-            f"[CVF] inserito cv_files id={cvf_id} candidateId={cand_id} size={st.st_size} sha1={sha1[:8]}...",
-            flush=True,
-        )
+        print(f"[CVF] inserito cv_files id={cvf_id} size={st.st_size} sha1={sha1[:8]}...", flush=True)
 
         conn.commit()
-        insert_import_event_newconn(
-            "SUCCESS",
-            f"Inserito {os.path.basename(path)} sha1={sha1}",
-            cand_id,
-            cvf_id,
-        )
+        insert_import_event_newconn("SUCCESS", f"Inserito {os.path.basename(path)} sha1={sha1}", cand_id, cvf_id)
 
+        # Sposta file
         try:
-            move_to_processed(path)
-            # --- ensure DB path points to processed file (not inbox) ---
-            _base = _sanitize_filename(os.path.basename(path))
-            _yyyy, _mm = _base[0:4], _base[4:6]
-            _new_path = os.path.join(PROCESSED_DIR, f"{_yyyy}-{_mm}", _base)
-            if os.path.exists(_new_path):
-                cur.execute('UPDATE cv_files SET path=%s WHERE id=%s', (_new_path, cvf_id))
+            new_path = move_to_processed(path)
+            if new_path != path:
+                cur.execute('UPDATE cv_files SET path=%s WHERE id=%s', (new_path, cvf_id))
                 conn.commit()
-                print(f"[CVF] updated path -> {_new_path}")
-            else:
-                print(f"[WARN] processed file not found after move: {_new_path}")
         except Exception as e:
-            print(
-                f"[WARN] move_to_processed(OK, {path}) failed: {_safe(str(e))}",
-                file=sys.stderr,
-            )
+            print(f"[WARN] move_to_processed failed: {_safe(str(e))}", file=sys.stderr)
 
-        print(
-            f"[OK] Elaborato {os.path.basename(path)} -> candidate={cand_id} submissionIndex={sub_idx} cvf={cvf_id}",
-            flush=True,
-        )
+        print(f"[OK] Elaborato {os.path.basename(path)} -> candidate={cand_id} submissionIndex={sub_idx}", flush=True)
 
     except Exception as e:
         try:
@@ -493,14 +588,8 @@ def process_one_file(conn, path: str):
             pass
         conn.commit()
         err = traceback.format_exc()
-        print(
-            f"[ERR] Errore su file {path}: {_safe(str(e))}\n{err}",
-            file=sys.stderr,
-        )
-        insert_import_event_newconn(
-            "ERROR",
-            f"{os.path.basename(path)}: {err}",
-        )
+        print(f"[ERR] Errore su file {path}: {_safe(str(e))}\n{err}", file=sys.stderr)
+        insert_import_event_newconn("ERROR", f"{os.path.basename(path)}: {err}")
     finally:
         try:
             cur.close()
@@ -511,25 +600,21 @@ def process_one_file(conn, path: str):
 def main():
     print(f"[BOOT] Parser online. WATCH_DIR={WATCH_DIR}", flush=True)
     print(f"[BOOT] PROCESSED_DIR={PROCESSED_DIR}", flush=True)
+    print(f"[BOOT] OCR_ENABLED={OCR_ENABLED}, OCR_LANG={OCR_LANG}", flush=True)
+    print(f"[BOOT] NER spaCy={'ON' if NLP else 'OFF'}", flush=True)
+    
     conn = pg_connect()
     try:
         once = os.environ.get("ONCE") == "1"
         while True:
             try:
-                pdfs = sorted(
-                    [
-                        os.path.join(WATCH_DIR, f)
-                        for f in os.listdir(WATCH_DIR)
-                        if f.lower().endswith(".pdf")
-                        and os.path.isfile(os.path.join(WATCH_DIR, f))
-                    ]
-                )
+                pdfs = sorted([
+                    os.path.join(WATCH_DIR, f)
+                    for f in os.listdir(WATCH_DIR)
+                    if f.lower().endswith(".pdf") and os.path.isfile(os.path.join(WATCH_DIR, f))
+                ])
             except FileNotFoundError:
-                print(
-                    f"[ERR] WATCH_DIR {WATCH_DIR} non esiste",
-                    file=sys.stderr,
-                    flush=True,
-                )
+                print(f"[ERR] WATCH_DIR {WATCH_DIR} non esiste", file=sys.stderr, flush=True)
                 return
 
             print(f"[SCAN] trovati {len(pdfs)} pdf", flush=True)
