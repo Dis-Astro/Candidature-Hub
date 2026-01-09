@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { prisma } from "../../../../../lib/prisma";
 
 /**
@@ -31,31 +32,35 @@ export async function POST(
       return NextResponse.json({ error: "Candidato non trovato" }, { status: 404 });
     }
 
+    let result: { ok: boolean; action: string; displayId: number };
+
     if (action === "discard") {
       await prisma.candidate.update({
         where: { id: candidate.id },
         data: { discarded: true, updatedAt: new Date() },
       });
-      return NextResponse.json({ ok: true, action: "discarded", displayId: candidate.displayId });
-    }
-
-    if (action === "approve") {
+      result = { ok: true, action: "discarded", displayId: candidate.displayId };
+    } else if (action === "approve") {
       await prisma.candidate.update({
         where: { id: candidate.id },
         data: { rating: 5, discarded: false, updatedAt: new Date() },
       });
-      return NextResponse.json({ ok: true, action: "approved", displayId: candidate.displayId });
-    }
-
-    if (action === "restore") {
+      result = { ok: true, action: "approved", displayId: candidate.displayId };
+    } else if (action === "restore") {
       await prisma.candidate.update({
         where: { id: candidate.id },
         data: { discarded: false, rating: null, updatedAt: new Date() },
       });
-      return NextResponse.json({ ok: true, action: "restored", displayId: candidate.displayId });
+      result = { ok: true, action: "restored", displayId: candidate.displayId };
+    } else {
+      return NextResponse.json({ error: "Azione non valida" }, { status: 400 });
     }
 
-    return NextResponse.json({ error: "Azione non valida" }, { status: 400 });
+    // Invalida cache pagine lista e dettaglio
+    revalidatePath("/candidates");
+    revalidatePath(`/candidates/${candidate.displayId}`);
+
+    return NextResponse.json(result);
   } catch (e) {
     console.error("[API quick-action] Error:", e);
     return NextResponse.json({ error: String(e) }, { status: 500 });
