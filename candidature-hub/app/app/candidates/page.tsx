@@ -306,15 +306,15 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
                 <HeaderLink field="updatedAt" label="Aggiornato" />
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Invii</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                <HeaderLink field="discarded" label="Scartato" />
-              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Stato</th>
             </tr>
           </thead>
 
           <tbody className="divide-y divide-slate-100">
             {items.map((c) => {
               const certified = isCertified(c);
+              const state = getCandidateState(c);
+              const stateBadge = STATE_BADGE[state];
               const idPill = certified
                 ? "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-gradient-to-r from-amber-200 to-yellow-300 text-amber-900 border border-amber-400 hover:from-amber-300 hover:to-yellow-400 shadow-sm transition-all"
                 : "inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all";
@@ -366,13 +366,14 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
                     </span>
                   </td>
 
-                  {/* Scartato */}
+                  {/* Stato */}
                   <td className="px-4 py-3">
-                    {c.discarded ? (
-                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-100 text-red-600 text-sm" title="Scartato">✕</span>
-                    ) : (
-                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-100 text-slate-400 text-sm" title="Attivo">–</span>
-                    )}
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs border ${stateBadge.class}`} title={stateBadge.label}>
+                      {state === "SCARTATO" && "✕ "}
+                      {state === "ASSUMERE" && "★ "}
+                      {state === "SHORTLIST" && "✓ "}
+                      {stateBadge.label}
+                    </span>
                   </td>
                 </tr>
               );
