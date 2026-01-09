@@ -669,13 +669,17 @@ def process_one_file(conn, path: str, ocr_enabled: bool = False):
 def main():
     print(f"[BOOT] Parser online. WATCH_DIR={WATCH_DIR}", flush=True)
     print(f"[BOOT] PROCESSED_DIR={PROCESSED_DIR}", flush=True)
-    print(f"[BOOT] OCR_ENABLED={OCR_ENABLED}, OCR_LANG={OCR_LANG}", flush=True)
+    print(f"[BOOT] OCR_LANG={OCR_LANG}", flush=True)
     print(f"[BOOT] NER spaCy={'ON' if NLP else 'OFF'}", flush=True)
     
     conn = pg_connect()
     try:
         once = os.environ.get("ONCE") == "1"
         while True:
+            # Leggi config OCR dal DB ad ogni ciclo
+            ocr_enabled = get_ocr_enabled_from_db()
+            print(f"[CONFIG] OCR abilitato: {ocr_enabled}", flush=True)
+            
             try:
                 pdfs = sorted([
                     os.path.join(WATCH_DIR, f)
@@ -689,7 +693,7 @@ def main():
             print(f"[SCAN] trovati {len(pdfs)} pdf", flush=True)
             for p in pdfs:
                 print(f"[DEBUG] trovo file: {p}", flush=True)
-                process_one_file(conn, p)
+                process_one_file(conn, p, ocr_enabled)
 
             if once:
                 break
