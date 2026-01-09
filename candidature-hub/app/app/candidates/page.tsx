@@ -260,7 +260,12 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative">
+      {/* Watermark logo */}
+      <div className="fixed bottom-8 right-8 pointer-events-none z-0 opacity-[0.08]">
+        <img src="/logo.png" alt="" className="w-32 h-32 object-contain" />
+      </div>
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
