@@ -113,13 +113,14 @@ export async function POST(req: Request) {
       },
       deletedCandidates: delRes.rowCount,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("POST /api/candidates/merge error:", e);
     try {
       await client.query("ROLLBACK");
     } catch {}
+    const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
-      { error: "merge failed", detail: String(e?.message ?? e) },
+      { error: "merge failed", detail: message },
       { status: 500 }
     );
   } finally {
