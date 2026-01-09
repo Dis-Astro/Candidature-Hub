@@ -27,6 +27,19 @@ type Config = {
   ocrEnabled: boolean;
 };
 
+type RetentionReport = {
+  candidatesCount: number;
+  attachmentsCount: number;
+  filesCount: number;
+  candidates: Array<{
+    displayId: number;
+    firstName: string;
+    lastName: string;
+    updatedAt: string;
+    attachmentsCount: number;
+  }>;
+} | null;
+
 const DEFAULT_CONFIG: Config = {
   nasPath: "/mnt/nas_curriculum/mail2pdf",
   processedPath: "/mnt/nas_curriculum/mail2pdf/processed",
@@ -38,7 +51,7 @@ const DEFAULT_CONFIG: Config = {
   pollSeconds: 60,
   postAction: "move",
   moveFolder: "Processed",
-  retentionDays: 90,
+  retentionDays: 365,
   alertTo: "",
   smtpHost: "",
   smtpPort: 587,
@@ -54,6 +67,12 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [runningParser, setRunningParser] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  // GDPR Retention state
+  const [retentionReport, setRetentionReport] = useState<RetentionReport>(null);
+  const [loadingRetention, setLoadingRetention] = useState(false);
+  const [executingRetention, setExecutingRetention] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/config")
