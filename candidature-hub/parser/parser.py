@@ -135,7 +135,7 @@ if not DATABASE_URL:
 
 # === Regex & normalizzazioni ===
 RE_EMAIL = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.I)
-RE_PHONE = re.compile(r"(?:\+?\d[\d\-\s\.\/]{5,}\d)")
+RE_PHONE = re.compile(r"(?:\+?\d[\d\-\s\.\/]{7,}\d)")  # almeno 7 cifre per evitare date
 
 # Parole da escludere come nome/cognome (comuni nei CV)
 EXCLUDED_WORDS = {
@@ -147,6 +147,9 @@ EXCLUDED_WORDS = {
     "allegato", "allegati", "pagina", "page", "di", "del", "della",
     "gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
     "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre",
+    "professionale", "profilo", "ingegnere", "ingegneria", "geometra",
+    "esame", "stato", "laurea", "universita", "università", "oggetto",
+    "candidatura", "ricerca", "azienda", "gestione", "sistemi", "nome", "cognome",
 }
 
 
@@ -262,27 +265,52 @@ def derive_names_from_filename(path: str) -> Tuple[Optional[str], Optional[str]]
 
 def derive_names_from_text_heuristic(text: str) -> Tuple[Optional[str], Optional[str]]:
     """
-    Fallback heuristic: cerca pattern Nome Cognome nelle prime righe.
-    Migliore del semplice regex perché filtra parole comuni.
+    Cerca pattern strutturati come "Nome: X" "Cognome: Y" o "Curriculum Vitae di X Y"
+    e pattern Nome Cognome nelle prime righe del CV.
     """
     if not text:
         return (None, None)
     
-    # Cerca nelle prime 20 righe
-    lines = text.split("\n")[:20]
+    lines = text.split("\n")[:40]
+    joined = " ".join(lines)
     
-    for line in lines:
+    # 1) Pattern "Curriculum Vitae di Nome Cognome"
+    m = re.search(r"Curriculum\s+Vitae\s+di\s+([A-ZÀ-ÿ][a-zA-ZÀ-ÿ]+)\s+([A-ZÀ-ÿ][a-zA-ZÀ-ÿ]+)", joined, re.I)
+    if m:
+        fn = m.group(1).capitalize()
+        ln = m.group(2).capitalize()
+        if is_valid_name(fn) and is_valid_name(ln):
+            return (fn, ln)
+    
+    # 2) Pattern "Nome: X" + "Cognome: Y"
+    fn_match = re.search(r"Nome[:\s]+([A-ZÀ-ÿ][a-zA-ZÀ-ÿ]+)", joined)
+    ln_match = re.search(r"Cognome[:\s]+([A-ZÀ-ÿ][a-zA-ZÀ-ÿ]+)", joined)
+    if fn_match and ln_match:
+        fn = fn_match.group(1).capitalize()
+        ln = ln_match.group(1).capitalize()
+        if is_valid_name(fn) and is_valid_name(ln):
+            return (fn, ln)
+    
+    # 3) Prima riga sola con NOME COGNOME maiuscolo
+    for line in lines[:5]:
         line = line.strip()
-        if not line:
+        if not line or len(line) < 3:
             continue
-        
-        # Pattern: due o tre parole con iniziale maiuscola
-        m = re.match(r"^([A-Z][a-zA-ZÀ-ÿ]+)\s+([A-Z][a-zA-ZÀ-ÿ]+)(?:\s+([A-Z][a-zA-ZÀ-ÿ]+))?$", line)
+        # Es: "TOMMASO SAMMACICCIA" o "Gianni PIATTI"
+        m = re.match(r"^([A-ZÀ-ÿ][a-zA-ZÀ-ÿ]+)\s+([A-ZÀ-ÿ][a-zA-ZÀ-ÿ]+)$", line)
         if m:
-            parts = [p for p in m.groups() if p]
-            valid_parts = [p for p in parts if is_valid_name(p)]
-            if len(valid_parts) >= 2:
-                return (valid_parts[0].capitalize(), valid_parts[-1].capitalize())
+            fn = m.group(1).capitalize()
+            ln = m.group(2).capitalize()
+            if is_valid_name(fn) and is_valid_name(ln):
+                return (fn, ln)
+    
+    # 4) Pattern "C.v. _ Nome geom. COGNOME" (specifico per geometri)
+    m = re.search(r"C\.?v\.?\s*[_\-]?\s*([A-ZÀ-ÿ][a-zA-ZÀ-ÿ]+)\s+(?:geom\.?|Geom\.?|ing\.?|Ing\.?)?\s*([A-ZÀ-ÿ][a-zA-ZÀ-ÿ]+)", joined, re.I)
+    if m:
+        fn = m.group(1).capitalize()
+        ln = m.group(2).capitalize()
+        if is_valid_name(fn) and is_valid_name(ln):
+            return (fn, ln)
     
     return (None, None)
 
