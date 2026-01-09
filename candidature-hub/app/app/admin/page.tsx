@@ -271,7 +271,7 @@ export default function AdminPage() {
           <h2 className="font-semibold text-lg">Cancellazione Automatica Candidati (GDPR)</h2>
           <p className="text-sm text-gray-600 mt-1">
             Elimina automaticamente i dati dei candidati <strong>SCARTATI</strong> più vecchi di X giorni.
-            L'azione rimuoverà il record dal database e i file associati dal NAS.
+            L&apos;azione rimuoverà il record dal database e i file associati dal NAS.
           </p>
         </div>
 
