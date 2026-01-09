@@ -261,11 +261,6 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-4 relative">
-      {/* Watermark logo */}
-      <div className="fixed bottom-8 right-8 pointer-events-none z-0 opacity-[0.08]">
-        <img src="/logo.png" alt="" className="w-32 h-32 object-contain" />
-      </div>
-
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -326,14 +321,13 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
 
               return (
                 <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
-                  {/* ID (DORATO se certificato) */}
+                  {/* ID */}
                   <td className="px-4 py-3">
                     <Link
                       href={`/candidates/${c.displayId}`}
-                      className={idPill}
-                      title={certified ? "🏆 CERTIFICATO - Apri scheda" : "Apri scheda candidato"}
+                      className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all"
+                      title="Apri scheda candidato"
                     >
-                      {certified && <span className="mr-1">🏆</span>}
                       {c.displayId}
                     </Link>
                   </td>
@@ -347,7 +341,19 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
                     )}
                   </td>
 
-                  <td className="px-4 py-3 font-medium text-slate-800">{c.lastName}</td>
+                  <td className="px-4 py-3 font-medium text-slate-800">
+                    <span className="inline-flex items-center gap-2">
+                      {c.lastName}
+                      {certified && (
+                        <img 
+                          src="/logo.png" 
+                          alt="Certificato" 
+                          className="w-6 h-6 object-contain opacity-40" 
+                          title="🏆 CERTIFICATO"
+                        />
+                      )}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-slate-600">{c.firstName}</td>
                   <td className="px-4 py-3 text-slate-600">{formatMansione(c.mansione)}</td>
 
