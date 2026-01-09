@@ -317,19 +317,8 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
               const stateBadge = STATE_BADGE[state];
 
               return (
-                <tr key={c.id} className="hover:bg-slate-50/50 transition-colors relative">
-                  {/* Timbro CERTIFICATO - sovrapposto come watermark */}
-                  {certified && (
-                    <td className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                      <img 
-                        src="/logo.png" 
-                        alt="Certificato" 
-                        className="w-24 h-24 object-contain opacity-20" 
-                      />
-                    </td>
-                  )}
-                  
-                  {/* ID (DORATO se certificato) */}
+                <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
+                  {/* ID (DORATO con 🏆 se certificato) */}
                   <td className="px-4 py-3">
                     <Link
                       href={`/candidates/${c.displayId}`}
