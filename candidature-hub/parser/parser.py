@@ -83,8 +83,29 @@ def _safe(s: str) -> str:
 WATCH_DIR = os.environ.get("WATCH_DIR", "/mnt/nas_curriculum/mail2pdf")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 PROCESSED_DIR = os.environ.get("PROCESSED_DIR", os.path.join(WATCH_DIR, "processed"))
-OCR_ENABLED = os.environ.get("OCR_ENABLED", "0") == "1"
 OCR_LANG = os.environ.get("OCR_LANG", "ita")  # tesseract language
+
+# OCR_ENABLED viene letto dal DB SystemConfig se disponibile, altrimenti da env
+_OCR_ENABLED_ENV = os.environ.get("OCR_ENABLED", "0") == "1"
+
+
+def get_ocr_enabled_from_db() -> bool:
+    """Legge l'impostazione ocrEnabled dalla tabella system_config."""
+    global DATABASE_URL
+    if not DATABASE_URL:
+        return _OCR_ENABLED_ENV
+    try:
+        import psycopg2
+        conn = psycopg2.connect(DATABASE_URL)
+        with conn.cursor() as cur:
+            cur.execute('SELECT "ocrEnabled" FROM system_config WHERE id = %s', ("main",))
+            row = cur.fetchone()
+            if row:
+                return bool(row[0])
+        conn.close()
+    except Exception as e:
+        print(f"[WARN] Impossibile leggere ocrEnabled dal DB: {e}", file=sys.stderr)
+    return _OCR_ENABLED_ENV
 
 
 def _sanitize_filename(name: str) -> str:
