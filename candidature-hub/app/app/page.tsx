@@ -34,8 +34,6 @@ export default async function Page() {
 
       <div className="flex gap-3">
         <Link href="/candidates" className="underline">Vai alla lista candidati</Link>
-        <Link href="/docs" className="underline">Documentazione</Link>
-        <Link href="/health" className="underline">Health</Link>
       </div>
     </main>
   )

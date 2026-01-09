@@ -317,14 +317,29 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
               const stateBadge = STATE_BADGE[state];
 
               return (
-                <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
-                  {/* ID */}
+                <tr key={c.id} className="hover:bg-slate-50/50 transition-colors relative">
+                  {/* Timbro CERTIFICATO - sovrapposto come watermark */}
+                  {certified && (
+                    <td className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                      <img 
+                        src="/logo.png" 
+                        alt="Certificato" 
+                        className="w-24 h-24 object-contain opacity-20" 
+                      />
+                    </td>
+                  )}
+                  
+                  {/* ID (DORATO se certificato) */}
                   <td className="px-4 py-3">
                     <Link
                       href={`/candidates/${c.displayId}`}
-                      className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all"
-                      title="Apri scheda candidato"
+                      className={certified 
+                        ? "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-gradient-to-r from-amber-200 to-yellow-300 text-amber-900 border border-amber-400 hover:from-amber-300 hover:to-yellow-400 shadow-sm transition-all"
+                        : "inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all"
+                      }
+                      title={certified ? "🏆 CERTIFICATO - Apri scheda" : "Apri scheda candidato"}
                     >
+                      {certified && <span>🏆</span>}
                       {c.displayId}
                     </Link>
                   </td>
@@ -338,19 +353,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
                     )}
                   </td>
 
-                  <td className="px-4 py-3 font-medium text-slate-800">
-                    <span className="inline-flex items-center gap-2">
-                      {c.lastName}
-                      {certified && (
-                        <img 
-                          src="/logo.png" 
-                          alt="Certificato" 
-                          className="w-6 h-6 object-contain opacity-40" 
-                          title="🏆 CERTIFICATO"
-                        />
-                      )}
-                    </span>
-                  </td>
+                  <td className="px-4 py-3 font-medium text-slate-800">{c.lastName}</td>
                   <td className="px-4 py-3 text-slate-600">{c.firstName}</td>
                   <td className="px-4 py-3 text-slate-600">{formatMansione(c.mansione)}</td>
 
