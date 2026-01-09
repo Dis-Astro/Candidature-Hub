@@ -418,12 +418,12 @@ def extract_text_pdfminer(pdf_path: str) -> str:
         return ""
 
 
-def extract_text_ocr(pdf_path: str) -> str:
+def extract_text_ocr(pdf_path: str, ocr_enabled: bool) -> str:
     """
     Estrae testo con OCR (tesseract).
     Richiede: tesseract-ocr, tesseract-ocr-ita, poppler-utils
     """
-    if not OCR_AVAILABLE or not OCR_ENABLED:
+    if not OCR_AVAILABLE or not ocr_enabled:
         return ""
     
     try:
