@@ -68,3 +68,7 @@ next
 .emergent/
 .gitconfig
 !**/.env.example
+-e 
+# Environment files
+*.env
+*.env.*
