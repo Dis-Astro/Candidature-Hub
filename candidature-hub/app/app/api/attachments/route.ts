@@ -3,31 +3,34 @@ import { prisma } from "../../../lib/prisma";
 import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
+import crypto from "crypto";
 
-// Base path per allegati su NAS (configurabile via SystemConfig)
+// Base path per allegati su NAS
 async function getAttachmentsBasePath(): Promise<string> {
   const cfg = await prisma.systemConfig.findUnique({ where: { id: "main" } });
   const nasPath = cfg?.nasPath || "/mnt/nas_curriculum";
   return path.join(nasPath, "attachments");
 }
 
-// Tipi MIME consentiti
+// Tipi MIME consentiti (allowlist stretta)
 const ALLOWED_MIME_TYPES = new Set([
+  // PDF
   "application/pdf",
+  // Immagini
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  // Audio
   "audio/mpeg",
   "audio/mp3",
   "audio/wav",
-  "audio/ogg",
-  "audio/webm",
+  "audio/x-wav",
   "audio/m4a",
   "audio/x-m4a",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
+  "audio/mp4",
+  // Word
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "text/plain",
 ]);
 
 // Max 50MB
@@ -38,18 +41,63 @@ function inferType(mimeType: string): "CV" | "AUDIO_COLLOQUIO" | "DOCUMENTO" | "
   if (mimeType.startsWith("audio/")) return "AUDIO_COLLOQUIO";
   if (mimeType.startsWith("image/")) return "IMMAGINE";
   if (mimeType === "application/pdf") return "DOCUMENTO";
-  if (mimeType.includes("word") || mimeType === "text/plain") return "DOCUMENTO";
+  if (mimeType.includes("word")) return "DOCUMENTO";
   return "ALTRO";
+}
+
+// Sanitizza filename: rimuove caratteri pericolosi
+function sanitizeFilename(filename: string): string {
+  // Rimuove path traversal e caratteri pericolosi
+  let safe = filename
+    .replace(/\.\./g, "")           // path traversal
+    .replace(/[\/\\]/g, "")         // separatori path
+    .replace(/[<>|:*?"]/g, "")      // caratteri Windows pericolosi
+    .replace(/[\x00-\x1f]/g, "")    // caratteri di controllo
+    .trim();
+  
+  // Limita lunghezza
+  if (safe.length > 100) {
+    const ext = path.extname(safe);
+    const base = path.basename(safe, ext);
+    safe = base.slice(0, 90) + ext;
+  }
+  
+  // Fallback se vuoto
+  if (!safe || safe === ".") {
+    safe = "file";
+  }
+  
+  return safe;
+}
+
+// Genera nome storage sicuro (timestamp + hash)
+function generateStorageName(originalName: string): string {
+  const timestamp = Date.now();
+  const hash = crypto.randomBytes(8).toString("hex");
+  const ext = path.extname(originalName).toLowerCase() || "";
+  return `${timestamp}_${hash}${ext}`;
+}
+
+// Log audit
+async function logAudit(action: string, entity: string, entityId?: string, details?: string) {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        action,
+        entity,
+        entityId: entityId || null,
+        details: details || null,
+        userId: null, // "system" - no auth implementata
+      },
+    });
+  } catch (e) {
+    console.error("[AuditLog] Failed to log:", e);
+  }
 }
 
 /**
  * POST /api/attachments
  * Upload allegato per candidato
- * 
- * FormData:
- * - file: File
- * - candidateId: string
- * - type?: AttachmentType (opzionale, auto-detect da MIME)
  */
 export async function POST(req: NextRequest) {
   try {
@@ -65,6 +113,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "candidateId mancante" }, { status: 400 });
     }
 
+    // Validazione dimensione (prima di tutto per evitare sprechi)
+    if (file.size > MAX_SIZE) {
+      return NextResponse.json(
+        { error: `File troppo grande. Dimensione massima consentita: 50MB` },
+        { status: 400 }
+      );
+    }
+
+    // Validazione MIME (allowlist stretta)
+    if (!ALLOWED_MIME_TYPES.has(file.type)) {
+      return NextResponse.json(
+        { error: `Tipo file non consentito: ${file.type}. Formati accettati: PDF, immagini (JPG/PNG/GIF), audio (MP3/WAV/M4A), documenti Word.` },
+        { status: 400 }
+      );
+    }
+
     // Verifica candidato esiste
     const candidate = await prisma.candidate.findUnique({
       where: { id: candidateId },
@@ -74,24 +138,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Candidato non trovato" }, { status: 404 });
     }
 
-    // Validazione MIME
-    if (!ALLOWED_MIME_TYPES.has(file.type)) {
-      return NextResponse.json(
-        { error: `Tipo file non consentito: ${file.type}` },
-        { status: 400 }
-      );
-    }
-
-    // Validazione dimensione
-    if (file.size > MAX_SIZE) {
-      return NextResponse.json(
-        { error: `File troppo grande (max ${MAX_SIZE / 1024 / 1024}MB)` },
-        { status: 400 }
-      );
-    }
+    // Sanitizza filename originale (per display)
+    const originalFilename = sanitizeFilename(file.name);
+    
+    // Genera nome storage sicuro
+    const storageName = generateStorageName(originalFilename);
 
     // Determina tipo
-    const attachmentType = (typeOverride as typeof inferType extends (m: string) => infer R ? R : never) || inferType(file.type);
+    const attachmentType = (typeOverride as "CV" | "AUDIO_COLLOQUIO" | "DOCUMENTO" | "IMMAGINE" | "NOTE" | "ALTRO") || inferType(file.type);
 
     // Crea directory candidato
     const basePath = await getAttachmentsBasePath();
@@ -100,31 +154,36 @@ export async function POST(req: NextRequest) {
       await mkdir(candidateDir, { recursive: true });
     }
 
-    // Sanitizza filename
-    const timestamp = Date.now();
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
-    const finalName = `${timestamp}_${safeName}`;
-    const filePath = path.join(candidateDir, finalName);
+    const filePath = path.join(candidateDir, storageName);
 
     // Scrivi file
     const buffer = Buffer.from(await file.arrayBuffer());
     await writeFile(filePath, buffer);
 
-    // Salva in DB
+    // Salva in DB (conserva nome originale per download)
     const attachment = await prisma.attachment.create({
       data: {
-        filename: file.name,
+        filename: originalFilename,  // Nome originale sanitizzato (per UI/download)
         mimeType: file.type,
         size: file.size,
         type: attachmentType,
-        path: filePath,
-        uploadedBy: "system", // TODO: utente autenticato
+        path: filePath,              // Path storage con nome sicuro
+        uploadedBy: "system",
         candidateId,
       },
     });
 
+    // Audit log
+    await logAudit(
+      "ATTACHMENT_UPLOAD",
+      "Attachment",
+      attachment.id,
+      JSON.stringify({ candidateId, filename: originalFilename, size: file.size, type: attachmentType })
+    );
+
     return NextResponse.json({
       ok: true,
+      message: "File caricato con successo",
       attachment: {
         id: attachment.id,
         filename: attachment.filename,
@@ -135,7 +194,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     console.error("[API attachments POST] Error:", e);
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return NextResponse.json({ error: "Errore durante il caricamento del file" }, { status: 500 });
   }
 }
 
