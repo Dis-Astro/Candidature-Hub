@@ -313,73 +313,45 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
                     </Link>
                   </td>
 
-                  {/* ✅ Colloquio = interviewed */}
-                  <td className="p-3">
+                  {/* Colloquio */}
+                  <td className="px-4 py-3">
                     {c.interviewed ? (
-                      <span
-                        className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-800 border border-green-200"
-                        title="Colloquio fatto"
-                      >
-                        ✓
-                      </span>
+                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-100 text-green-700 text-sm" title="Colloquio fatto">✓</span>
                     ) : (
-                      <span
-                        className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-100 text-red-800 border border-red-200"
-                        title="Colloquio non fatto"
-                      >
-                        ✕
-                      </span>
+                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-100 text-slate-400 text-sm" title="No colloquio">–</span>
                     )}
                   </td>
 
-                  <td className="p-3">{c.lastName}</td>
-                  <td className="p-3">{c.firstName}</td>
-                  <td className="p-3">{formatMansione(c.mansione)}</td>
+                  <td className="px-4 py-3 font-medium text-slate-800">{c.lastName}</td>
+                  <td className="px-4 py-3 text-slate-600">{c.firstName}</td>
+                  <td className="px-4 py-3 text-slate-600">{formatMansione(c.mansione)}</td>
 
-                  <td className="p-3">
+                  <td className="px-4 py-3">
                     {typeof c.rating === "number" && (
-                      <span
-                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${ratingPillClass(
-                          c.rating
-                        )}`}
-                      >
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${ratingPillClass(c.rating)}`}>
                         {c.rating}
                       </span>
                     )}
                   </td>
 
-                  <td className="p-3 text-gray-600">
+                  <td className="px-4 py-3 text-slate-500 text-xs">
                     {new Date(c.updatedAt).toLocaleString("it-IT", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
+                      day: "2-digit", month: "2-digit", year: "2-digit",
                     })}
                   </td>
 
-                  <td className="p-3">
-                    <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs">
-                      Invii: {c._count.importEvents}
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                      {c._count.importEvents}
                     </span>
                   </td>
 
-                  {/* ✅ Curriculum scartato = discarded */}
-                  <td className="p-3">
+                  {/* Scartato */}
+                  <td className="px-4 py-3">
                     {c.discarded ? (
-                      <span
-                        className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-800 border border-green-200"
-                        title="Curriculum scartato"
-                      >
-                        ✓
-                      </span>
+                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-100 text-red-600 text-sm" title="Scartato">✕</span>
                     ) : (
-                      <span
-                        className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-100 text-red-800 border border-red-200"
-                        title="Curriculum NON scartato"
-                      >
-                        ✕
-                      </span>
+                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-100 text-slate-400 text-sm" title="Attivo">–</span>
                     )}
                   </td>
                 </tr>
@@ -388,7 +360,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
 
             {items.length === 0 && (
               <tr>
-                <td colSpan={9} className="p-8 text-center text-gray-500">
+                <td colSpan={9} className="px-4 py-12 text-center text-slate-400">
                   Nessun risultato trovato
                 </td>
               </tr>
