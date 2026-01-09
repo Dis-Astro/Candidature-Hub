@@ -7,7 +7,6 @@ export async function GET() {
   let cfg = await prisma.systemConfig.findUnique({ where: { id: CONFIG_ID } });
 
   if (!cfg) {
-    // Crea record default se non esiste
     cfg = await prisma.systemConfig.create({ data: { id: CONFIG_ID } });
   }
 
@@ -16,14 +15,13 @@ export async function GET() {
     ...cfg,
     imapPass: cfg.imapPass ? "********" : "",
     smtpPass: cfg.smtpPass ? "********" : "",
+    extDbPass: cfg.extDbPass ? "********" : "",
   });
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-
-    // Carica config corrente per preservare password mascherate
     const current = await prisma.systemConfig.findUnique({ where: { id: CONFIG_ID } });
 
     const data = {
@@ -32,13 +30,12 @@ export async function POST(req: NextRequest) {
       imapHost: String(body.imapHost || ""),
       imapPort: Number(body.imapPort) || 993,
       imapUser: String(body.imapUser || ""),
-      // Preserva password esistente se mascherata
       imapPass: body.imapPass === "********" ? (current?.imapPass || "") : String(body.imapPass || ""),
       imapMailbox: String(body.imapMailbox || "INBOX"),
       pollSeconds: Number(body.pollSeconds) || 60,
       postAction: String(body.postAction || "move"),
       moveFolder: String(body.moveFolder || "Processed"),
-      retentionDays: Number(body.retentionDays) || 90,
+      retentionDays: Number(body.retentionDays) || 365,
       alertTo: String(body.alertTo || ""),
       smtpHost: String(body.smtpHost || ""),
       smtpPort: Number(body.smtpPort) || 587,
@@ -46,12 +43,31 @@ export async function POST(req: NextRequest) {
       smtpPass: body.smtpPass === "********" ? (current?.smtpPass || "") : String(body.smtpPass || ""),
       parserTimerSec: Number(body.parserTimerSec) || 60,
       ocrEnabled: Boolean(body.ocrEnabled),
+      // Database esterno
+      useExternalDb: Boolean(body.useExternalDb),
+      extDbHost: String(body.extDbHost || "localhost"),
+      extDbPort: Number(body.extDbPort) || 5432,
+      extDbName: String(body.extDbName || ""),
+      extDbUser: String(body.extDbUser || ""),
+      extDbPass: body.extDbPass === "********" ? (current?.extDbPass || "") : String(body.extDbPass || ""),
+      extDbSsl: Boolean(body.extDbSsl),
     };
 
     await prisma.systemConfig.upsert({
       where: { id: CONFIG_ID },
       create: { id: CONFIG_ID, ...data },
       update: data,
+    });
+
+    // Audit log per cambio config
+    await prisma.auditLog.create({
+      data: {
+        action: "CONFIG_UPDATE",
+        entity: "SystemConfig",
+        entityId: CONFIG_ID,
+        details: JSON.stringify({ useExternalDb: data.useExternalDb }),
+        userId: null,
+      },
     });
 
     return NextResponse.json({ ok: true });
