@@ -67,6 +67,14 @@ const DEFAULT_CONFIG: Config = {
   smtpPass: "",
   parserTimerSec: 60,
   ocrEnabled: false,
+  // Database esterno
+  useExternalDb: false,
+  extDbHost: "localhost",
+  extDbPort: 5432,
+  extDbName: "",
+  extDbUser: "",
+  extDbPass: "",
+  extDbSsl: false,
 };
 
 export default function AdminPage() {
@@ -78,6 +86,10 @@ export default function AdminPage() {
 
   // GDPR Retention state
   const [retentionReport, setRetentionReport] = useState<RetentionReport>(null);
+
+  // DB Test state
+  const [testingDb, setTestingDb] = useState(false);
+  const [dbTestResult, setDbTestResult] = useState<{ ok: boolean; message: string; details?: Record<string, string> } | null>(null);
   const [loadingRetention, setLoadingRetention] = useState(false);
   const [executingRetention, setExecutingRetention] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
