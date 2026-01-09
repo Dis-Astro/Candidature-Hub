@@ -118,6 +118,9 @@ export function ReviewNavigation({ currentDisplayId, candidateId, discarded, rat
         showToast("success", "✓ Candidato RIPRISTINATO (da valutare)");
       }
 
+      // Refresh server data (invalida cache Next.js)
+      router.refresh();
+
       // Refresh dati navigazione
       await fetchData();
 
