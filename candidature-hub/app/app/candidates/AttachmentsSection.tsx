@@ -16,6 +16,8 @@ type Props = {
   candidateId: string;
 };
 
+type Toast = { type: "success" | "error"; message: string } | null;
+
 const TYPE_LABELS: Record<string, string> = {
   CV: "CV",
   AUDIO_COLLOQUIO: "Audio colloquio",
@@ -34,6 +36,9 @@ const TYPE_ICONS: Record<string, string> = {
   ALTRO: "📎",
 };
 
+const MAX_SIZE_MB = 50;
+const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -44,7 +49,19 @@ export function AttachmentsSection({ candidateId }: Props) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<Toast>(null);
+
+  // Auto-hide toast
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  const showToast = (type: "success" | "error", message: string) => {
+    setToast({ type, message });
+  };
 
   const fetchAttachments = useCallback(async () => {
     try {
@@ -68,8 +85,14 @@ export function AttachmentsSection({ candidateId }: Props) {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validazione client-side dimensione
+    if (file.size > MAX_SIZE_BYTES) {
+      showToast("error", `❌ File troppo grande. Dimensione massima: ${MAX_SIZE_MB}MB`);
+      e.target.value = "";
+      return;
+    }
+
     setUploading(true);
-    setError(null);
 
     try {
       const formData = new FormData();
@@ -81,18 +104,17 @@ export function AttachmentsSection({ candidateId }: Props) {
         body: formData,
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data.error || "Upload fallito");
       }
 
-      // Refresh lista
+      showToast("success", `✅ File "${file.name}" caricato con successo`);
       await fetchAttachments();
-      
-      // Reset input
       e.target.value = "";
     } catch (err) {
-      setError(String(err));
+      showToast("error", `❌ ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setUploading(false);
     }
@@ -103,13 +125,16 @@ export function AttachmentsSection({ candidateId }: Props) {
 
     try {
       const res = await fetch(`/api/attachments/${id}`, { method: "DELETE" });
+      const data = await res.json();
+
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data.error || "Eliminazione fallita");
       }
+
+      showToast("success", `✅ File "${filename}" eliminato`);
       await fetchAttachments();
     } catch (err) {
-      setError(String(err));
+      showToast("error", `❌ ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -117,10 +142,23 @@ export function AttachmentsSection({ candidateId }: Props) {
   const isImage = (mimeType: string) => mimeType.startsWith("image/");
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
+    <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-4 relative">
+      {/* Toast */}
+      {toast && (
+        <div
+          className={`fixed top-4 right-4 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-medium transition-all animate-in slide-in-from-top-2 max-w-md ${
+            toast.type === "success"
+              ? "bg-green-600 text-white"
+              : "bg-red-600 text-white"
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Allegati</h2>
-        <label className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 cursor-pointer disabled:opacity-50">
+        <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 cursor-pointer disabled:opacity-50 transition-colors">
           {uploading ? (
             "Caricamento..."
           ) : (
@@ -131,7 +169,7 @@ export function AttachmentsSection({ candidateId }: Props) {
                 className="hidden"
                 onChange={handleUpload}
                 disabled={uploading}
-                accept=".pdf,.mp3,.wav,.ogg,.m4a,.webm,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.txt"
+                accept=".pdf,.mp3,.wav,.m4a,.jpg,.jpeg,.png,.gif,.doc,.docx"
               />
             </>
           )}
@@ -139,19 +177,13 @@ export function AttachmentsSection({ candidateId }: Props) {
       </div>
 
       <p className="text-xs text-slate-500">
-        PDF, audio (MP3, WAV, M4A), immagini, documenti Word. Max 50MB per file.
+        PDF, immagini (JPG/PNG/GIF), audio (MP3/WAV/M4A), documenti Word. <strong>Max {MAX_SIZE_MB}MB per file.</strong>
       </p>
-
-      {error && (
-        <div className="p-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-sm">
-          {error}
-        </div>
-      )}
 
       {loading ? (
         <div className="text-sm text-slate-500">Caricamento allegati...</div>
       ) : attachments.length === 0 ? (
-        <div className="text-sm text-slate-500 italic">Nessun allegato</div>
+        <div className="text-sm text-slate-500 italic py-4 text-center">Nessun allegato</div>
       ) : (
         <div className="space-y-2">
           {attachments.map((att) => (
@@ -199,7 +231,7 @@ export function AttachmentsSection({ candidateId }: Props) {
                 <a
                   href={`/api/attachments/${att.id}`}
                   download={att.filename}
-                  className="p-2 rounded-md hover:bg-slate-200 text-slate-600"
+                  className="p-2 rounded-lg hover:bg-slate-200 text-slate-600 transition-colors"
                   title="Scarica"
                 >
                   ⬇️
@@ -208,7 +240,7 @@ export function AttachmentsSection({ candidateId }: Props) {
                 {/* Delete */}
                 <button
                   onClick={() => handleDelete(att.id, att.filename)}
-                  className="p-2 rounded-md hover:bg-red-100 text-red-600"
+                  className="p-2 rounded-lg hover:bg-red-100 text-red-600 transition-colors"
                   title="Elimina"
                 >
                   🗑️
