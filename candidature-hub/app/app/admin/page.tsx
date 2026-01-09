@@ -25,6 +25,14 @@ type Config = {
   // Parser
   parserTimerSec: number;
   ocrEnabled: boolean;
+  // Database esterno
+  useExternalDb: boolean;
+  extDbHost: string;
+  extDbPort: number;
+  extDbName: string;
+  extDbUser: string;
+  extDbPass: string;
+  extDbSsl: boolean;
 };
 
 type RetentionReport = {
