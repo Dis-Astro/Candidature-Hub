@@ -194,13 +194,12 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
       updatedAt: true,
       interviewed: true,
       discarded: true,
-      notes: true, // Note candidato (per check certificato)
+      notes: true,
       _count: { select: { importEvents: true } },
-      // Per check "certificato" [SCEMO]
       interviews: {
         orderBy: { date: "desc" },
         take: 1,
-        select: { notes: true, hrNotes: true },
+        select: { notes: true, hrNotes: true, decision: true },
       },
     },
   });
@@ -213,6 +212,23 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
     const allNotes = `${interviewNotes} ${hrNotes} ${candidateNotes}`;
     return /\[SCEMO\]/i.test(allNotes);
   }
+
+  // Helper: determina stato candidato per badge
+  type CandidateState = "SCARTATO" | "DA_VALUTARE" | "SHORTLIST" | "ASSUMERE";
+  function getCandidateState(c: typeof items[0]): CandidateState {
+    if (c.discarded) return "SCARTATO";
+    const decision = c.interviews[0]?.decision;
+    if (decision === "ASSUME") return "ASSUMERE";
+    if (c.rating !== null && c.rating >= 5) return "SHORTLIST";
+    return "DA_VALUTARE";
+  }
+
+  const STATE_BADGE: Record<CandidateState, { label: string; class: string }> = {
+    SCARTATO: { label: "Scartato", class: "bg-red-100 text-red-700 border-red-200" },
+    DA_VALUTARE: { label: "Da valutare", class: "bg-blue-100 text-blue-700 border-blue-200" },
+    SHORTLIST: { label: "Shortlist", class: "bg-green-100 text-green-700 border-green-200" },
+    ASSUMERE: { label: "Assumere", class: "bg-amber-100 text-amber-800 border-amber-300 font-bold" },
+  };
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
