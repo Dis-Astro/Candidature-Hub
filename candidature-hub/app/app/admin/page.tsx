@@ -246,19 +246,181 @@ export default function AdminPage() {
       </section>
 
       {/* Retention GDPR */}
-      <section className="border rounded-lg p-4 space-y-3">
-        <h2 className="font-semibold text-lg">Retention GDPR</h2>
+      <section className="border rounded-lg p-4 space-y-4">
+        <div>
+          <h2 className="font-semibold text-lg">Cancellazione Automatica Candidati (GDPR)</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            Elimina automaticamente i dati dei candidati <strong>SCARTATI</strong> più vecchi di X giorni.
+            L'azione rimuoverà il record dal database e i file associati dal NAS.
+          </p>
+        </div>
+
         <div className="max-w-xs">
           <label className="block text-xs font-medium text-gray-700">
-            Giorni di retention (0 = disabilitata)
+            Giorni di retention (es. 365)
           </label>
           <input
             type="number"
+            min={1}
             className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
             value={config.retentionDays}
             onChange={(e) => update("retentionDays", Number(e.target.value))}
           />
+          <p className="text-xs text-gray-500 mt-1">
+            I candidati scartati da più di {config.retentionDays} giorni saranno eliminabili.
+          </p>
         </div>
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={async () => {
+              if (config.retentionDays <= 0) {
+                setMessage({ type: "err", text: "Inserisci un numero di giorni valido" });
+                return;
+              }
+              setLoadingRetention(true);
+              setRetentionReport(null);
+              try {
+                const res = await fetch(`/api/admin/retention?days=${config.retentionDays}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || "Errore");
+                setRetentionReport(data.report);
+              } catch (e) {
+                setMessage({ type: "err", text: String(e) });
+              } finally {
+                setLoadingRetention(false);
+              }
+            }}
+            disabled={loadingRetention || config.retentionDays <= 0}
+            className="px-4 py-2 rounded-md bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 disabled:opacity-50"
+          >
+            {loadingRetention ? "Calcolo..." : "SIMULA"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (!retentionReport || retentionReport.candidatesCount === 0) {
+                setMessage({ type: "err", text: "Esegui prima una simulazione" });
+                return;
+              }
+              setShowConfirmModal(true);
+            }}
+            disabled={!retentionReport || retentionReport.candidatesCount === 0 || executingRetention}
+            className="px-4 py-2 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+          >
+            ESEGUI PULIZIA
+          </button>
+        </div>
+
+        {/* Report simulazione */}
+        {retentionReport && (
+          <div className="border rounded-lg p-4 bg-amber-50 space-y-3">
+            <h3 className="font-semibold text-amber-900">Report simulazione</h3>
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="bg-white rounded p-3 text-center">
+                <div className="text-2xl font-bold text-amber-700">{retentionReport.candidatesCount}</div>
+                <div className="text-xs text-gray-600">Candidati</div>
+              </div>
+              <div className="bg-white rounded p-3 text-center">
+                <div className="text-2xl font-bold text-amber-700">{retentionReport.attachmentsCount}</div>
+                <div className="text-xs text-gray-600">Allegati DB</div>
+              </div>
+              <div className="bg-white rounded p-3 text-center">
+                <div className="text-2xl font-bold text-amber-700">{retentionReport.filesCount}</div>
+                <div className="text-xs text-gray-600">File NAS</div>
+              </div>
+            </div>
+
+            {retentionReport.candidates.length > 0 && (
+              <div className="max-h-40 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-amber-100">
+                    <tr>
+                      <th className="p-2 text-left">ID</th>
+                      <th className="p-2 text-left">Nome</th>
+                      <th className="p-2 text-left">Ultimo agg.</th>
+                      <th className="p-2 text-right">Allegati</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {retentionReport.candidates.slice(0, 20).map((c) => (
+                      <tr key={c.displayId} className="border-t">
+                        <td className="p-2">{c.displayId}</td>
+                        <td className="p-2">{c.firstName} {c.lastName}</td>
+                        <td className="p-2">{new Date(c.updatedAt).toLocaleDateString("it-IT")}</td>
+                        <td className="p-2 text-right">{c.attachmentsCount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {retentionReport.candidates.length > 20 && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    ...e altri {retentionReport.candidates.length - 20} candidati
+                  </p>
+                )}
+              </div>
+            )}
+
+            {retentionReport.candidatesCount === 0 && (
+              <p className="text-sm text-green-700">✅ Nessun candidato da eliminare con i criteri attuali.</p>
+            )}
+          </div>
+        )}
+
+        {/* Modal conferma */}
+        {showConfirmModal && retentionReport && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 max-w-md mx-4 shadow-2xl">
+              <h3 className="text-lg font-bold text-red-700">⚠️ Conferma eliminazione</h3>
+              <p className="mt-3 text-sm text-gray-700">
+                Stai per eliminare definitivamente:
+              </p>
+              <ul className="mt-2 text-sm space-y-1">
+                <li>• <strong>{retentionReport.candidatesCount}</strong> candidati</li>
+                <li>• <strong>{retentionReport.attachmentsCount}</strong> allegati</li>
+                <li>• <strong>{retentionReport.filesCount}</strong> file dal NAS</li>
+              </ul>
+              <p className="mt-4 text-sm font-semibold text-red-700">
+                ⚠️ Questa azione NON può essere annullata.
+              </p>
+              <div className="mt-6 flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className="px-4 py-2 rounded-md border text-sm font-medium hover:bg-gray-50"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={async () => {
+                    setExecutingRetention(true);
+                    setShowConfirmModal(false);
+                    try {
+                      const res = await fetch("/api/admin/retention", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ days: config.retentionDays, confirm: true }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error || "Errore");
+                      setMessage({ type: "ok", text: data.message || "Pulizia completata" });
+                      setRetentionReport(null);
+                    } catch (e) {
+                      setMessage({ type: "err", text: String(e) });
+                    } finally {
+                      setExecutingRetention(false);
+                    }
+                  }}
+                  disabled={executingRetention}
+                  className="px-4 py-2 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+                >
+                  {executingRetention ? "Eliminazione..." : "CONFERMA ELIMINAZIONE"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* SMTP Alert */}
