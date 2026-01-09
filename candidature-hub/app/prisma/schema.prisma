@@ -296,6 +296,15 @@ model SystemConfig {
   parserTimerSec Int     @default(60)
   ocrEnabled     Boolean @default(false)
 
+  // Database esterno (opzionale)
+  useExternalDb  Boolean @default(false)
+  extDbHost      String  @default("localhost")
+  extDbPort      Int     @default(5432)
+  extDbName      String  @default("")
+  extDbUser      String  @default("")
+  extDbPass      String  @default("")
+  extDbSsl       Boolean @default(false)
+
   @@map("system_config")
 }
 
