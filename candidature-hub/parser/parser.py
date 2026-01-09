@@ -245,15 +245,27 @@ def derive_names_from_email(email: Optional[str]) -> Tuple[Optional[str], Option
 
 
 def derive_names_from_filename(path: str) -> Tuple[Optional[str], Optional[str]]:
-    """Estrae Nome Cognome dal nome del file."""
+    """Estrae Nome Cognome dal nome del file PDF."""
     base = os.path.basename(path)
     base = os.path.splitext(base)[0]
     
+    # Normalizza: sostituisci separatori con spazi
     cleaned = re.sub(r"[_\-\.]+", " ", base)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     
-    # Pattern Nome Cognome con iniziali maiuscole
-    m = re.search(r"\b([A-Z][a-zA-Z]{1,30})\s+([A-Z][a-zA-Z]{1,30})\b", cleaned)
+    # Rimuovi prefissi comuni
+    cleaned = re.sub(r"^(CV|Candidatura|Curriculum)[_\s\-]*", "", cleaned, flags=re.I)
+    
+    # Pattern 1: "Nome Cognome" diretto
+    m = re.search(r"\b([A-ZÀ-ÿ][a-zA-ZÀ-ÿ]{2,})\s+([A-ZÀ-ÿ][a-zA-ZÀ-ÿ]{2,})\b", cleaned)
+    if m:
+        fn = m.group(1).capitalize()
+        ln = m.group(2).capitalize()
+        if is_valid_name(fn) and is_valid_name(ln):
+            return fn, ln
+    
+    # Pattern 2: "Nome geom COGNOME" (con titolo in mezzo)
+    m = re.search(r"\b([A-ZÀ-ÿ][a-zA-ZÀ-ÿ]{2,})\s+(?:geom\.?|ing\.?|dott\.?)\s*([A-ZÀ-ÿ][a-zA-ZÀ-ÿ]{2,})\b", cleaned, re.I)
     if m:
         fn = m.group(1).capitalize()
         ln = m.group(2).capitalize()
