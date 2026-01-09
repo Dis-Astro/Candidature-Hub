@@ -232,7 +232,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
     const arrow = isActive ? (sortDir === "asc" ? " ↑" : " ↓") : "";
 
     return (
-      <Link href={href} className="underline hover:text-blue-600 inline-flex items-center gap-1">
+      <Link href={href} className="text-slate-600 hover:text-slate-900 inline-flex items-center gap-1 font-medium">
         {label}
         {arrow && <span className="text-blue-600 font-bold">{arrow}</span>}
       </Link>
@@ -240,21 +240,19 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
   }
 
   return (
-    <div className="p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Candidati</h1>
-
-        <div className="flex items-center gap-3">
-          <div className="text-sm text-gray-600">{rangeText}</div>
-
-          <Link
-            href="/candidates/new"
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
-            title="Inserisci un candidato manualmente (senza email)"
-          >
-            + Nuovo candidato
-          </Link>
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Candidati</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{rangeText}</p>
         </div>
+        <Link
+          href="/candidates/new"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow-sm hover:shadow transition-all"
+        >
+          <span className="text-lg">+</span> Nuovo candidato
+        </Link>
       </div>
 
       <FilterForm />
