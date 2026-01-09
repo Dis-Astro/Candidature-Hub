@@ -572,27 +572,35 @@ def process_one_file(conn, path: str):
         fn: Optional[str] = None
         ln: Optional[str] = None
 
-        # 1) NER spaCy (priorità)
-        if NLP:
-            fn, ln = extract_names_ner(text)
-            if fn and ln:
-                print(f"[NER] Nome trovato: {fn} {ln}", flush=True)
+        # 1) Heuristic strutturata (pattern "Nome:", "Cognome:", "CV di X Y", ecc.)
+        fn, ln = derive_names_from_text_heuristic(text)
+        if fn and ln:
+            print(f"[HEUR] Nome da testo strutturato: {fn} {ln}", flush=True)
 
-        # 2) Heuristic da testo (prime righe)
+        # 2) Fallback: dal filename
         if not fn or not ln:
-            fn2, ln2 = derive_names_from_text_heuristic(text)
+            fn2, ln2 = derive_names_from_filename(path)
             if fn2 or ln2:
                 fn = fn or fn2
                 ln = ln or ln2
-                print(f"[HEUR] Nome da testo: {fn} {ln}", flush=True)
+                print(f"[FILE] Nome da filename: {fn} {ln}", flush=True)
 
-        # 3) Fallback: dal filename
+        # 3) Fallback: dall'email
         if not fn or not ln:
-            fn3, ln3 = derive_names_from_filename(path)
+            fn3, ln3 = derive_names_from_email(email)
             if fn3 or ln3:
                 fn = fn or fn3
                 ln = ln or ln3
-                print(f"[FILE] Nome da filename: {fn} {ln}", flush=True)
+                print(f"[EMAIL] Nome da email: {fn} {ln}", flush=True)
+
+        # 4) Ultima risorsa: NER spaCy (meno affidabile per CV italiani)
+        if not fn or not ln:
+            if NLP:
+                fn4, ln4 = extract_names_ner(text)
+                if fn4 or ln4:
+                    fn = fn or fn4
+                    ln = ln or ln4
+                    print(f"[NER] Nome da spaCy: {fn} {ln}", flush=True)
 
         email = normalize_email(email)
         phone = normalize_phone(phone)
