@@ -254,12 +254,12 @@ model AuditLog {
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId String?
 
-  action String
-  entity String
+  action   String   // es. ATTACHMENT_UPLOAD, ATTACHMENT_DELETE, GDPR_RETENTION_RUN
+  entity   String   // es. Attachment, Candidate
+  entityId String?  // ID dell'entità coinvolta (opzionale)
+  details  String?  @db.Text // Dettagli aggiuntivi (JSON o testo)
 
-  // NOTE: il resto del modello potrebbe continuare nel tuo file originale,
-  // ma qui includo i campi minimi per non rompere la migrazione.
-  // Se nel progetto avevi altri campi sotto, dimmelo e li riallineo.
+  @@index([action, createdAt])
   @@map("audit_logs")
 }
 
