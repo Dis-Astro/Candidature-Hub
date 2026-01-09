@@ -145,8 +145,22 @@ export function InterviewForm({ candidate, lastInterview, previousInterviews = [
         {/* Anagrafica - 2/3 */}
         <section className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-slate-800">Anagrafica</h2>
-            {certified && <img src="/logo.png" alt="Certificato" className="w-10 h-10 object-contain" />}
+            <div className="flex items-center gap-3">
+              <h2 className="text-base font-semibold text-slate-800">Anagrafica</h2>
+              {lastName && (
+                <span className="text-lg font-bold text-slate-700 flex items-center gap-2">
+                  {lastName}
+                  {certified && (
+                    <img 
+                      src="/logo.png" 
+                      alt="Certificato" 
+                      className="w-10 h-10 object-contain opacity-50" 
+                      title="🏆 CERTIFICATO"
+                    />
+                  )}
+                </span>
+              )}
+            </div>
           </div>
           
           <div className="grid grid-cols-2 gap-3">
