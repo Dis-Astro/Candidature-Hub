@@ -315,9 +315,6 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
               const certified = isCertified(c);
               const state = getCandidateState(c);
               const stateBadge = STATE_BADGE[state];
-              const idPill = certified
-                ? "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-gradient-to-r from-amber-200 to-yellow-300 text-amber-900 border border-amber-400 hover:from-amber-300 hover:to-yellow-400 shadow-sm transition-all"
-                : "inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all";
 
               return (
                 <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
