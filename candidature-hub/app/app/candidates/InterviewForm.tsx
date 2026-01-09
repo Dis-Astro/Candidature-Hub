@@ -139,7 +139,18 @@ export function InterviewForm({ candidate, lastInterview, previousInterviews = [
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative">
+      {/* === TIMBRO CERTIFICATO - sovrapposto a tutta la scheda === */}
+      {certified && (
+        <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50">
+          <img 
+            src="/logo.png" 
+            alt="Certificato" 
+            className="w-64 h-64 object-contain opacity-15 rotate-[-15deg]" 
+          />
+        </div>
+      )}
+      
       {/* === HEADER COMPATTO: Anagrafica + Meta === */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Anagrafica - 2/3 */}
@@ -150,14 +161,7 @@ export function InterviewForm({ candidate, lastInterview, previousInterviews = [
               {lastName && (
                 <span className="text-lg font-bold text-slate-700 flex items-center gap-2">
                   {lastName}
-                  {certified && (
-                    <img 
-                      src="/logo.png" 
-                      alt="Certificato" 
-                      className="w-10 h-10 object-contain opacity-50" 
-                      title="🏆 CERTIFICATO"
-                    />
-                  )}
+                  {certified && <span className="text-amber-500">🏆</span>}
                 </span>
               )}
             </div>
