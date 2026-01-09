@@ -444,7 +444,7 @@ def extract_text_ocr(pdf_path: str, ocr_enabled: bool) -> str:
         return ""
 
 
-def extract_text_utf8(pdf_path: str) -> str:
+def extract_text_utf8(pdf_path: str, ocr_enabled: bool = False) -> str:
     """
     Estrae testo da PDF con fallback multipli:
     1. pypdf
@@ -457,8 +457,8 @@ def extract_text_utf8(pdf_path: str) -> str:
         txt = extract_text_pdfminer(pdf_path)
     
     # Se ancora vuoto e OCR abilitato, prova OCR
-    if not txt.strip() and OCR_ENABLED:
-        txt = extract_text_ocr(pdf_path)
+    if not txt.strip() and ocr_enabled:
+        txt = extract_text_ocr(pdf_path, ocr_enabled)
     
     try:
         return (txt or "").encode("utf-8", "replace").decode("utf-8")
