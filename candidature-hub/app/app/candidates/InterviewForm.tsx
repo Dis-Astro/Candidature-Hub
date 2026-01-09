@@ -210,6 +210,17 @@ export function InterviewForm({ candidate, lastInterview, previousInterviews = [
         </section>
       </div>
 
+      {/* === VALUTAZIONE RAPIDA === */}
+      <section className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+        <h2 className="text-base font-semibold text-slate-800 mb-3">Valutazione</h2>
+        <QuickActions
+          candidateId={candidate.id}
+          discarded={candidate.discarded}
+          rating={candidate.rating}
+          decision={lastInterview?.decision ?? null}
+        />
+      </section>
+
       {/* === ALLEGATI === */}
       <AttachmentsSection candidateId={candidate.id} />
 
