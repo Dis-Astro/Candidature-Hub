@@ -569,7 +569,7 @@ def insert_cv_file(cur, candidateId: str, path: str, size: int, sha1: str, text:
 
 
 # === core ===
-def process_one_file(conn, path: str):
+def process_one_file(conn, path: str, ocr_enabled: bool = False):
     print(f"[PROC] Inizio elaborazione: {path}", flush=True)
     cur = conn.cursor()
     try:
@@ -584,7 +584,7 @@ def process_one_file(conn, path: str):
         sha1 = file_sha1(path)
         print(f"[PROC] sha1={sha1}", flush=True)
 
-        text = extract_text_utf8(path)
+        text = extract_text_utf8(path, ocr_enabled)
         print(f"[PROC] estratto testo: {len(text)} caratteri", flush=True)
 
         email = pick_email(text)
