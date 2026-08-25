@@ -25,6 +25,8 @@ from typing import Optional, Tuple, List
 
 import psycopg2
 import psycopg2.extras
+from workers.runtime_config import ensure_storage, load_config
+from workers.antivirus import scan_file
 
 # --- stdout/stderr UTF-8 safe ---
 try:
@@ -80,9 +82,10 @@ def _safe(s: str) -> str:
 
 
 # === Config ===
-WATCH_DIR = os.environ.get("WATCH_DIR", "/mnt/nas_curriculum/mail2pdf")
+WATCH_DIR = os.environ.get("WATCH_DIR", "/data/inbox/manual")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 PROCESSED_DIR = os.environ.get("PROCESSED_DIR", os.path.join(WATCH_DIR, "processed"))
+ERROR_DIR = os.environ.get("ERROR_DIR", "/data/error")
 OCR_LANG = os.environ.get("OCR_LANG", "ita")  # tesseract language
 
 # OCR_ENABLED viene letto dal DB SystemConfig se disponibile, altrimenti da env
@@ -112,6 +115,7 @@ def _sanitize_filename(name: str) -> str:
     """Normalizza nomi file per evitare problemi su URL/FS."""
     import unicodedata
     n = unicodedata.normalize("NFKD", name)
+    n = "".join(ch for ch in n if not unicodedata.combining(ch))
     n = (n.replace(""", '"').replace(""", '"')
            .replace("'", "'").replace("'", "'")
            .replace("–", "-").replace("—", "-"))
@@ -135,23 +139,6 @@ def _sanitize_filename(name: str) -> str:
     if not n.lower().endswith(".pdf"):
         n += ".pdf"
     return n
-
-
-# Fallback: leggi DATABASE_URL dal service app.service
-if not DATABASE_URL:
-    try:
-        out = subprocess.check_output(
-            ["bash", "-lc",
-             "systemctl cat app.service | sed -n 's/^[[:space:]]*Environment=DATABASE_URL=//p' | head -n1"],
-            text=True,
-        )
-        DATABASE_URL = (out or "").strip() or None
-    except Exception:
-        DATABASE_URL = None
-
-if not DATABASE_URL:
-    print("[FATAL] DATABASE_URL non impostata", file=sys.stderr)
-    sys.exit(1)
 
 
 # === Regex & normalizzazioni ===
@@ -390,6 +377,37 @@ def insert_import_event_newconn(
         print(f"[WARN] import_event(newconn) failed: {_safe(str(e))}", file=sys.stderr)
 
 
+def upsert_import_job(path: str, source: str) -> str:
+    c = pg_connect()
+    c.autocommit = True
+    job_id = "job_" + uuid.uuid4().hex[:24]
+    with c.cursor() as cur:
+        cur.execute(
+            'INSERT INTO import_jobs (id,"createdAt","updatedAt",source,status,filename,path,message,attempts) '
+            'VALUES (%s,now(),now(),%s,\'PROCESSING\',%s,%s,\'Analisi in corso\',1) '
+            'ON CONFLICT (path) DO UPDATE SET status=\'PROCESSING\', "updatedAt"=now(), attempts=import_jobs.attempts+1, message=\'Analisi in corso\' '
+            'RETURNING id',
+            (job_id, source, os.path.basename(path), path),
+        )
+        job_id = cur.fetchone()[0]
+    c.close()
+    return job_id
+
+
+def update_import_job(job_id: str, status: str, path: str, message: str, candidate_id: Optional[str] = None, threat: Optional[str] = None):
+    try:
+        c = pg_connect()
+        c.autocommit = True
+        with c.cursor() as cur:
+            cur.execute(
+                'UPDATE import_jobs SET status=%s,path=%s,message=%s,"candidateId"=%s,threat=%s,"updatedAt"=now() WHERE id=%s',
+                (status, path, _safe(message), candidate_id, threat, job_id),
+            )
+        c.close()
+    except Exception as error:
+        print(f"[WARN] aggiornamento import job fallito: {_safe(str(error))}", file=sys.stderr)
+
+
 # === PDF ===
 def extract_text_pypdf(pdf_path: str) -> str:
     """Estrae testo con pypdf."""
@@ -456,9 +474,15 @@ def extract_text_utf8(pdf_path: str, ocr_enabled: bool = False) -> str:
     if not txt.strip():
         txt = extract_text_pdfminer(pdf_path)
     
-    # Se ancora vuoto e OCR abilitato, prova OCR
-    if not txt.strip() and ocr_enabled:
-        txt = extract_text_ocr(pdf_path, ocr_enabled)
+    # Un PDF può contenere pochi caratteri tecnici ma essere in realtà una
+    # scansione. In quel caso l'OCR è utile anche se il testo non è vuoto.
+    compact = re.sub(r"\s+", "", txt or "")
+    readable = sum(ch.isalnum() for ch in compact)
+    low_quality = len(compact) < 140 or (len(compact) > 0 and readable / len(compact) < 0.55)
+    if ocr_enabled and low_quality:
+        ocr_text = extract_text_ocr(pdf_path, ocr_enabled)
+        if len(ocr_text.strip()) > len((txt or "").strip()):
+            txt = ocr_text
     
     try:
         return (txt or "").encode("utf-8", "replace").decode("utf-8")
@@ -507,6 +531,16 @@ def move_to_processed(path: str) -> str:
         return path
 
 
+def cleanup_error_files(days: int):
+    cutoff = time.time() - max(1, days) * 86400
+    for root, _, filenames in os.walk(ERROR_DIR):
+        for filename in filenames:
+            target = os.path.join(root, filename)
+            try:
+                if os.path.getmtime(target) < cutoff:
+                    os.remove(target)
+            except OSError as error:
+                print(f"[WARN] pulizia errori fallita per {target}: {_safe(str(error))}", file=sys.stderr)
 def get_next_submission_index(conn, first_name: str, last_name: str) -> int:
     """Restituisce il prossimo submissionIndex per questo nome+cognome."""
     with conn.cursor() as cur:
@@ -558,19 +592,20 @@ def ensure_candidate(cur, email, phone, fn, ln):
     return cand_id, int(sub_idx)
 
 
-def insert_cv_file(cur, candidateId: str, path: str, size: int, sha1: str, text: str) -> str:
+def insert_cv_file(cur, candidateId: str, path: str, size: int, sha1: str, source_key: str, text: str) -> str:
     nid = "cvf_" + uuid.uuid4().hex[:24]
     cur.execute(
-        'INSERT INTO cv_files (id,"createdAt",path,size,sha1,"extractedText","candidateId") '
-        "VALUES (%s, now(), %s, %s, %s, %s, %s)",
-        (nid, path, size, sha1, text, candidateId),
+        'INSERT INTO cv_files (id,"createdAt",path,size,sha1,"sourceKey","extractedText","candidateId") '
+        "VALUES (%s, now(), %s, %s, %s, %s, %s, %s)",
+        (nid, path, size, sha1, source_key, text, candidateId),
     )
     return nid
 
 
 # === core ===
-def process_one_file(conn, path: str, ocr_enabled: bool = False):
+def process_one_file(conn, path: str, ocr_enabled: bool = False, source: str = "MANUAL"):
     print(f"[PROC] Inizio elaborazione: {path}", flush=True)
+    job_id = upsert_import_job(path, source)
     cur = conn.cursor()
     try:
         try:
@@ -581,8 +616,22 @@ def process_one_file(conn, path: str, ocr_enabled: bool = False):
         cur.execute("SAVEPOINT onefile")
 
         st = os.stat(path)
+        if st.st_size > 50 * 1024 * 1024:
+            raise ValueError("PDF oltre il limite di 50 MB")
+        scan_file(path)
         sha1 = file_sha1(path)
+        source_key = hashlib.sha256(f"{os.path.realpath(path)}|{st.st_mtime_ns}|{st.st_size}".encode()).hexdigest()
         print(f"[PROC] sha1={sha1}", flush=True)
+
+        cur.execute('SELECT id, "candidateId" FROM cv_files WHERE "sourceKey" = %s', (source_key,))
+        previous = cur.fetchone()
+        if previous:
+            new_path = move_to_processed(path)
+            cur.execute('UPDATE cv_files SET path=%s WHERE id=%s', (new_path, previous[0]))
+            conn.commit()
+            insert_import_event_newconn("DUPLICATE", f"Retry già acquisito: {os.path.basename(path)}", previous[1], previous[0])
+            update_import_job(job_id, "DUPLICATE", new_path, "File già acquisito", previous[1])
+            return
 
         text = extract_text_utf8(path, ocr_enabled)
         print(f"[PROC] estratto testo: {len(text)} caratteri", flush=True)
@@ -633,7 +682,7 @@ def process_one_file(conn, path: str, ocr_enabled: bool = False):
         print(f"[CAND] creato candidato id={cand_id} name={fn or 'N/D'} {ln or 'N/D'} submissionIndex={sub_idx}", flush=True)
 
         # Nuovo CV
-        cvf_id = insert_cv_file(cur, cand_id, path, st.st_size, sha1, text)
+        cvf_id = insert_cv_file(cur, cand_id, path, st.st_size, sha1, source_key, text)
         print(f"[CVF] inserito cv_files id={cvf_id} size={st.st_size} sha1={sha1[:8]}...", flush=True)
 
         conn.commit()
@@ -645,6 +694,7 @@ def process_one_file(conn, path: str, ocr_enabled: bool = False):
             if new_path != path:
                 cur.execute('UPDATE cv_files SET path=%s WHERE id=%s', (new_path, cvf_id))
                 conn.commit()
+            update_import_job(job_id, "SUCCESS", new_path, "Candidato creato correttamente", cand_id)
         except Exception as e:
             print(f"[WARN] move_to_processed failed: {_safe(str(e))}", file=sys.stderr)
 
@@ -659,6 +709,17 @@ def process_one_file(conn, path: str, ocr_enabled: bool = False):
         err = traceback.format_exc()
         print(f"[ERR] Errore su file {path}: {_safe(str(e))}\n{err}", file=sys.stderr)
         insert_import_event_newconn("ERROR", f"{os.path.basename(path)}: {err}")
+        destination = path
+        try:
+            if os.path.isfile(path):
+                os.makedirs(ERROR_DIR, exist_ok=True)
+                destination = os.path.join(ERROR_DIR, f"{int(time.time())}_{_sanitize_filename(os.path.basename(path))}")
+                os.rename(path, destination)
+                print(f"[QUARANTINE] {path} -> {destination}", file=sys.stderr)
+        except Exception as quarantine_error:
+            print(f"[WARN] quarantena fallita: {_safe(str(quarantine_error))}", file=sys.stderr)
+        threat = _safe(str(e)) if "FOUND" in str(e) else None
+        update_import_job(job_id, "BLOCKED" if threat else "ERROR", destination, str(e), threat=threat)
     finally:
         try:
             cur.close()
@@ -667,8 +728,10 @@ def process_one_file(conn, path: str, ocr_enabled: bool = False):
 
 
 def main():
-    print(f"[BOOT] Parser online. WATCH_DIR={WATCH_DIR}", flush=True)
-    print(f"[BOOT] PROCESSED_DIR={PROCESSED_DIR}", flush=True)
+    global WATCH_DIR, PROCESSED_DIR, ERROR_DIR
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL non impostata")
+    print("[BOOT] Parser online; configurazione caricata dal database a ogni ciclo", flush=True)
     print(f"[BOOT] OCR_LANG={OCR_LANG}", flush=True)
     print(f"[BOOT] NER spaCy={'ON' if NLP else 'OFF'}", flush=True)
     
@@ -676,29 +739,37 @@ def main():
     try:
         once = os.environ.get("ONCE") == "1"
         while True:
-            # Leggi config OCR dal DB ad ogni ciclo
-            ocr_enabled = get_ocr_enabled_from_db()
+            config = load_config(DATABASE_URL)
+            ensure_storage(config)
+            PROCESSED_DIR = config["processedPath"]
+            ERROR_DIR = config["errorPath"]
+            cleanup_error_files(int(config.get("errorRetentionDays", 30)))
+            input_dirs = [(config["mailInboxPath"], "EMAIL"), (config["manualInboxPath"], "MANUAL")]
+            print(f"[CONFIG] input={input_dirs} processed={PROCESSED_DIR}", flush=True)
+            ocr_enabled = bool(config["ocrEnabled"])
             print(f"[CONFIG] OCR abilitato: {ocr_enabled}", flush=True)
             
             try:
-                pdfs = sorted([
-                    os.path.join(WATCH_DIR, f)
-                    for f in os.listdir(WATCH_DIR)
-                    if f.lower().endswith(".pdf") and os.path.isfile(os.path.join(WATCH_DIR, f))
-                ])
+                pdfs = sorted({
+                    (os.path.join(root, filename), source)
+                    for input_dir, source in input_dirs
+                    for root, _, filenames in os.walk(input_dir)
+                    for filename in filenames
+                    if filename.lower().endswith(".pdf")
+                })
             except FileNotFoundError:
                 print(f"[ERR] WATCH_DIR {WATCH_DIR} non esiste", file=sys.stderr, flush=True)
                 return
 
             print(f"[SCAN] trovati {len(pdfs)} pdf", flush=True)
-            for p in pdfs:
+            for p, source in pdfs:
                 print(f"[DEBUG] trovo file: {p}", flush=True)
-                process_one_file(conn, p, ocr_enabled)
+                process_one_file(conn, p, ocr_enabled, source)
 
             if once:
                 break
 
-            time.sleep(30)
+            time.sleep(max(5, int(config["parserPollSeconds"])))
     finally:
         try:
             conn.close()

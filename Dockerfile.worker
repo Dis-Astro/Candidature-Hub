@@ -1,0 +1,12 @@
+FROM python:3.12-slim
+ENV PYTHONUNBUFFERED=1 PYTHONPATH=/opt/candidature-hub
+RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-ita poppler-utils && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt/candidature-hub
+COPY candidature-hub/parser/requirements.txt /tmp/parser-requirements.txt
+COPY mail2pdf/requirements.txt /tmp/mail-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/parser-requirements.txt -r /tmp/mail-requirements.txt \
+    && python -m spacy download it_core_news_sm
+COPY candidature-hub/parser ./parser
+COPY mail2pdf ./mail2pdf
+COPY workers ./workers
+CMD ["python", "/opt/candidature-hub/parser/parser.py"]

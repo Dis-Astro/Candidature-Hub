@@ -26,6 +26,13 @@ enum Decision {
   LISTA_ATTESA
 }
 
+enum CandidateStatus {
+  DA_VALUTARE
+  SCARTATO
+  SHORTLIST
+  ASSUMERE
+}
+
 model Candidate {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -54,7 +61,8 @@ model Candidate {
   interviewedAt DateTime?
 
   /// ✅ CV scartato (true = scartato)
-  discarded Boolean @default(false)
+  discarded Boolean         @default(false)
+  status    CandidateStatus @default(DA_VALUTARE)
 
   displayId Int @unique @default(autoincrement())
 
@@ -62,11 +70,14 @@ model Candidate {
   attachments  Attachment[]
   interviews   Interview[]
   importEvents ImportEvent[]
+  importJobs   ImportJob[]
   tags         CandidateTag[]
 
+  @@unique([firstName, lastName, submissionIndex])
   @@index([lastName, firstName])
   @@index([mansione, rating])
   @@index([discarded])
+  @@index([status, updatedAt])
   @@map("candidates")
 }
 
@@ -90,7 +101,7 @@ model Attachment {
   size     Int
   type     AttachmentType @default(ALTRO)
 
-  /// Path su NAS (es. /mnt/nas_curriculum/attachments/<candidateId>/<filename>)
+  /// Path nello storage condiviso (es. /data/attachments/<candidateId>/<filename>)
   path String
 
   /// Chi ha caricato (userId o "system")
@@ -110,6 +121,7 @@ model CvFile {
   size          Int
   // ⚠️ NIENTE @unique QUI: vogliamo permettere duplicati di sha1
   sha1          String
+  sourceKey     String?  @unique
   extractedText String?  @db.Text
 
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
@@ -125,7 +137,7 @@ model Interview {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
 
-  /// Data/ora effettiva di “Inizia colloquio”
+  /// Data/ora effettiva di "Inizia colloquio"
   date DateTime
 
   /// Firma intervistatore
@@ -185,8 +197,8 @@ model Interview {
   /// Mansioni selezionate (CSV)
   appliedRoles String? @db.Text
 
-  /// ✅ Flag certificazione "100% scemo"
-  scemoCertified Boolean @default(false)
+  /// Profilo verificato da un recruiter.
+  profileVerified Boolean @default(false)
 
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   candidateId String
@@ -211,6 +223,26 @@ model ImportEvent {
 
   @@index([candidateId, createdAt])
   @@map("import_events")
+}
+
+model ImportJob {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  source    String
+  status    String   @default("QUEUED")
+  filename  String
+  path      String   @unique
+  message   String?  @db.Text
+  attempts  Int      @default(0)
+  threat    String?
+
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  candidateId String?
+
+  @@index([status, createdAt])
+  @@index([source, createdAt])
+  @@map("import_jobs")
 }
 
 model Tag {
@@ -243,8 +275,22 @@ model User {
   role         Role     @default(RECRUITER)
 
   auditLogs AuditLog[]
+  sessions  Session[]
 
   @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  tokenHash String   @unique
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@index([userId, expiresAt])
+  @@map("sessions")
 }
 
 model AuditLog {
@@ -254,10 +300,10 @@ model AuditLog {
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId String?
 
-  action   String   // es. ATTACHMENT_UPLOAD, ATTACHMENT_DELETE, GDPR_RETENTION_RUN
-  entity   String   // es. Attachment, Candidate
-  entityId String?  // ID dell'entità coinvolta (opzionale)
-  details  String?  @db.Text // Dettagli aggiuntivi (JSON o testo)
+  action   String // es. ATTACHMENT_UPLOAD, ATTACHMENT_DELETE, GDPR_RETENTION_RUN
+  entity   String // es. Attachment, Candidate
+  entityId String? // ID dell'entità coinvolta (opzionale)
+  details  String? @db.Text // Dettagli aggiuntivi (JSON o testo)
 
   @@index([action, createdAt])
   @@map("audit_logs")
@@ -268,22 +314,31 @@ model SystemConfig {
   id        String   @id @default("main")
   updatedAt DateTime @updatedAt
 
-  // NAS paths
-  nasPath       String @default("/mnt/nas_curriculum/mail2pdf")
-  processedPath String @default("/mnt/nas_curriculum/mail2pdf/processed")
+  // Cartelle configurabili nello storage permanente gestito da Docker.
+  storageRoot     String @default("/data")
+  mailInboxPath   String @default("/data/inbox/mail")
+  manualInboxPath String @default("/data/inbox/manual")
+  processedPath   String @default("/data/processed")
+  attachmentsPath String @default("/data/attachments")
+  backupPath      String @default("/data/backups")
+  errorPath       String @default("/data/error")
 
   // IMAP (mail2pdf)
-  imapHost    String @default("")
-  imapPort    Int    @default(993)
-  imapUser    String @default("")
-  imapPass    String @default("")
-  imapMailbox String @default("INBOX")
-  pollSeconds Int    @default(60)
-  postAction  String @default("move")
-  moveFolder  String @default("Processed")
+  mailEnabled Boolean @default(false)
+  imapHost    String  @default("")
+  imapPort    Int     @default(993)
+  imapUser    String  @default("")
+  imapPass    String  @default("")
+  imapMailbox String  @default("INBOX")
+  pollSeconds Int     @default(60)
+  postAction  String  @default("move")
+  moveFolder  String  @default("Processed")
 
   // Retention GDPR
-  retentionDays Int @default(90)
+  retentionDays Int @default(365)
+  mailRetentionDays   Int @default(90)
+  backupRetentionDays Int @default(30)
+  errorRetentionDays  Int @default(30)
 
   // SMTP Alert
   alertTo  String @default("")
@@ -293,18 +348,17 @@ model SystemConfig {
   smtpPass String @default("")
 
   // Parser
-  parserTimerSec Int     @default(60)
-  ocrEnabled     Boolean @default(false)
+  parserPollSeconds Int     @default(30)
+  ocrEnabled        Boolean @default(false)
 
   // Database esterno (opzionale)
-  useExternalDb  Boolean @default(false)
-  extDbHost      String  @default("localhost")
-  extDbPort      Int     @default(5432)
-  extDbName      String  @default("")
-  extDbUser      String  @default("")
-  extDbPass      String  @default("")
-  extDbSsl       Boolean @default(false)
+  useExternalDb Boolean @default(false)
+  extDbHost     String  @default("localhost")
+  extDbPort     Int     @default(5432)
+  extDbName     String  @default("")
+  extDbUser     String  @default("")
+  extDbPass     String  @default("")
+  extDbSsl      Boolean @default(false)
 
   @@map("system_config")
 }
-

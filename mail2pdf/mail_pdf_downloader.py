@@ -1,4 +1,4 @@
-import os, re, time, hashlib, email, traceback, smtplib, ssl
+import os, re, time, hashlib, email, traceback, smtplib, ssl, html
 from datetime import datetime, timedelta, date
 from email.header import decode_header, make_header
 from email.policy import default as default_policy
@@ -8,21 +8,26 @@ from imapclient import IMAPClient, SEEN, DELETED
 from bs4 import BeautifulSoup
 from xhtml2pdf import pisa
 from dotenv import dotenv_values
+from workers.runtime_config import ensure_storage, load_config
+from workers.antivirus import scan_bytes
 
 # ---------- Config ----------
 CFG = dotenv_values("/opt/mail2pdf/.env")
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+MAIL_ENABLED = False
 IMAP_HOST    = CFG.get("IMAP_HOST","")
 IMAP_PORT    = int(CFG.get("IMAP_PORT","993"))
 IMAP_USER    = CFG.get("IMAP_USER","")
 IMAP_PASS    = CFG.get("IMAP_PASS","")
 IMAP_MAILBOX = CFG.get("IMAP_MAILBOX","INBOX")
-SAVE_DIR     = CFG.get("SAVE_DIR","./downloads")
+SAVE_DIR     = CFG.get("SAVE_DIR", "/data/inbox/mail")
 POLL_SECONDS = int(CFG.get("POLL_SECONDS","60"))
 
 # Post processing
 POST_ACTION    = (CFG.get("POST_ACTION","none") or "none").lower()   # move|delete|none
 MOVE_FOLDER_BN = CFG.get("MOVE_FOLDER","Processed")  # base name (senza 'INBOX.')
 RETENTION_DAYS = int(CFG.get("RETENTION_DAYS","0") or 0)
+MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024
 
 # Alert email
 ALERT_TO   = CFG.get("ALERT_TO","")
@@ -31,12 +36,37 @@ SMTP_PORT  = int(CFG.get("SMTP_PORT","0") or 0)
 SMTP_USER  = CFG.get("SMTP_USER","")
 SMTP_PASS  = CFG.get("SMTP_PASS","")
 
-os.makedirs(SAVE_DIR, exist_ok=True)
-
 # rate limit alert: max 1 ogni 15 minuti
 ALERT_INTERVAL_SECONDS = 15 * 60
 _last_alert_ts = 0
 _last_cleanup_ts = 0  # per retention
+
+def refresh_config():
+    """Reload operational settings so email/storage changes require no redeploy."""
+    global MAIL_ENABLED, IMAP_HOST, IMAP_PORT, IMAP_USER, IMAP_PASS, IMAP_MAILBOX
+    global SAVE_DIR, POLL_SECONDS, POST_ACTION, MOVE_FOLDER_BN, RETENTION_DAYS
+    global ALERT_TO, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS
+    if not DATABASE_URL:
+        return
+    config = load_config(DATABASE_URL)
+    ensure_storage(config)
+    MAIL_ENABLED = bool(config.get("mailEnabled"))
+    IMAP_HOST = config.get("imapHost", "")
+    IMAP_PORT = int(config.get("imapPort", 993))
+    IMAP_USER = config.get("imapUser", "")
+    IMAP_PASS = config.get("imapPass", "")
+    IMAP_MAILBOX = config.get("imapMailbox", "INBOX")
+    SAVE_DIR = config["mailInboxPath"]
+    POLL_SECONDS = max(15, int(config.get("pollSeconds", 60)))
+    POST_ACTION = str(config.get("postAction", "move")).lower()
+    MOVE_FOLDER_BN = config.get("moveFolder", "Processed")
+    RETENTION_DAYS = int(config.get("mailRetentionDays", 90))
+    ALERT_TO = config.get("alertTo", "")
+    SMTP_HOST = config.get("smtpHost", "")
+    SMTP_PORT = int(config.get("smtpPort", 587))
+    SMTP_USER = config.get("smtpUser", "")
+    SMTP_PASS = config.get("smtpPass", "")
+    os.makedirs(SAVE_DIR, exist_ok=True)
 
 def send_alert(subject: str, body: str):
     global _last_alert_ts
@@ -95,15 +125,17 @@ def clean_html(html_body: str) -> str:
     for tag in soup(["script","style"]):
         tag.decompose()
     for img in soup.find_all("img"):
-        src = (img.get("src") or "").strip().lower()
-        if src.startswith("cid:"):
-            img.decompose()
+        img.decompose()
+    for tag in soup.find_all(True):
+        for attr in list(tag.attrs):
+            if attr.lower().startswith("on") or attr.lower() in {"style", "src", "srcset"}:
+                del tag.attrs[attr]
     return str(soup)
 
 def build_mail_pdf_html(msg, plain_text="", html_body=""):
-    subj = sanitize_filename(decode_str(msg.get("Subject","")))
-    from_ = decode_str(msg.get("From","")); to_ = decode_str(msg.get("To",""))
-    cc_ = decode_str(msg.get("Cc","")); date_ = decode_str(msg.get("Date",""))
+    subj = html.escape(sanitize_filename(decode_str(msg.get("Subject",""))))
+    from_ = html.escape(decode_str(msg.get("From",""))); to_ = html.escape(decode_str(msg.get("To","")))
+    cc_ = html.escape(decode_str(msg.get("Cc",""))); date_ = html.escape(decode_str(msg.get("Date","")))
     if not html_body:
         safe = (plain_text or "").replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\n","<br/>")
         html_body = f"<div style='font-family:Helvetica,Arial,sans-serif;font-size:12pt;'>{safe}</div>"
@@ -156,8 +188,14 @@ def save_pdf_attachment(part, base_prefix):
         pass
     fname = sanitize_filename(fname)
     out = os.path.join(SAVE_DIR, f"{base_prefix}__{fname}")
+    payload = part.get_payload(decode=True) or b""
+    if len(payload) > MAX_ATTACHMENT_SIZE:
+        raise ValueError(f"Allegato PDF oltre 25 MB: {fname}")
+    if not payload.startswith(b"%PDF-"):
+        raise ValueError(f"Allegato dichiarato PDF ma non valido: {fname}")
+    scan_bytes(payload, fname)
     with open(out,"wb") as f:
-        f.write(part.get_payload(decode=True))
+        f.write(payload)
     return out
 
 # ---------- Folder helpers ----------
@@ -239,6 +277,8 @@ def retention_cleanup(srv: IMAPClient):
 # ---------- Core ----------
 def process_unseen_once():
     saved=[]
+    if not MAIL_ENABLED:
+        return saved
     with IMAPClient(IMAP_HOST, port=IMAP_PORT, ssl=True) as srv:
         srv.login(IMAP_USER, IMAP_PASS)
         srv.select_folder(IMAP_MAILBOX)
@@ -253,6 +293,13 @@ def process_unseen_once():
                 subject = sanitize_filename(decode_str(msg.get("Subject",""))) or "senza_oggetto"
                 dt = datetime.now().strftime("%Y%m%d_%H%M%S")
                 key = msg_unique_key(msg)
+                state_dir = os.path.join(SAVE_DIR, ".mail-state")
+                os.makedirs(state_dir, exist_ok=True)
+                marker = os.path.join(state_dir, key)
+                if os.path.exists(marker):
+                    srv.add_flags(uid, [SEEN])
+                    move_or_delete(srv, uid)
+                    continue
                 base = f"{dt}__{key}__{subject}"
 
                 pdf_found=False
@@ -282,6 +329,8 @@ def process_unseen_once():
                 except Exception:
                     traceback.print_exc()
                 move_or_delete(srv, uid)
+                with open(marker, "w", encoding="ascii") as state:
+                    state.write(str(uid))
 
             except Exception as e:
                 send_alert(
@@ -293,11 +342,17 @@ def process_unseen_once():
     return saved
 
 def main():
+    refresh_config()
     print(f"[{datetime.now()}] Monitor IMAP {IMAP_HOST}/{IMAP_MAILBOX} → {SAVE_DIR} "
           f"(post={POST_ACTION}{'->'+MOVE_FOLDER_BN if POST_ACTION=='move' else ''}; retention={RETENTION_DAYS}d)")
     interval = max(POLL_SECONDS, 15)
     while True:
         try:
+            refresh_config()
+            if not MAIL_ENABLED:
+                print("Acquisizione email disabilitata; attendo configurazione.")
+                time.sleep(max(POLL_SECONDS, 15))
+                continue
             out = process_unseen_once()
             if out:
                 for p in out:

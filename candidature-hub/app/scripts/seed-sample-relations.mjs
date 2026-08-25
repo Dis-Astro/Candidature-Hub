@@ -25,7 +25,7 @@ async function main() {
   await prisma.cvFile.create({
     data: {
       candidateId: c.id,
-      path: "/mnt/nas_curriculum/mail2pdf/fake-seed.pdf",
+      path: "/data/processed/fake-seed.pdf",
       size: 123456,
       sha1: "seed" + Math.random().toString(16).slice(2),
     },

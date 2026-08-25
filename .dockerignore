@@ -1,0 +1,9 @@
+.git
+**/node_modules
+**/.next
+**/__pycache__
+**/.venv
+data
+candidature-hub-backups
+candidature-hub/parser/test_pdfs
+*.env

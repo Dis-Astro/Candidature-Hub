@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 
 type Attachment = {
   id: string;
@@ -146,7 +147,7 @@ export function AttachmentsSection({ candidateId }: Props) {
       {/* Toast */}
       {toast && (
         <div
-          className={`fixed top-4 right-4 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-medium transition-all animate-in slide-in-from-top-2 max-w-md ${
+          className={`fixed left-4 right-4 top-4 z-50 max-w-md rounded-xl px-5 py-3 text-sm font-medium shadow-2xl transition-all animate-in slide-in-from-top-2 sm:left-auto ${
             toast.type === "success"
               ? "bg-green-600 text-white"
               : "bg-red-600 text-white"
@@ -219,9 +220,12 @@ export function AttachmentsSection({ candidateId }: Props) {
                     rel="noopener noreferrer"
                     className="w-12 h-12 rounded border overflow-hidden"
                   >
-                    <img
+                    <Image
                       src={`/api/attachments/${att.id}`}
                       alt={att.filename}
+                      width={48}
+                      height={48}
+                      unoptimized
                       className="w-full h-full object-cover"
                     />
                   </a>

@@ -1,0 +1,107 @@
+name: candidature-hub
+
+x-common-env: &common-env
+  DATABASE_URL: postgresql://${POSTGRES_USER:-candidature}:${POSTGRES_PASSWORD:?Impostare POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-candidature_hub}
+  CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY:?Impostare CONFIG_ENCRYPTION_KEY}
+  COOKIE_SECURE: ${COOKIE_SECURE:-0}
+  MOBILE_ALLOWED_ORIGINS: ${MOBILE_ALLOWED_ORIGINS:-capacitor://localhost,http://localhost,https://localhost}
+  CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
+  CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+  ANTIVIRUS_REQUIRED: ${ANTIVIRUS_REQUIRED:-1}
+
+services:
+  clamav:
+    image: clamav/clamav:1.5.4
+    restart: unless-stopped
+    volumes: [clamav-data:/var/lib/clamav]
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping", "1"]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+      start_period: 120s
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-candidature_hub}
+      POSTGRES_USER: ${POSTGRES_USER:-candidature}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Impostare POSTGRES_PASSWORD}
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  storage-init:
+    image: alpine:3.20
+    environment: { PUID: "${PUID:-1000}", PGID: "${PGID:-1000}" }
+    command: ["sh", "-c", "mkdir -p /data/inbox/mail /data/inbox/manual /data/processed /data/attachments /data/backups /data/error && (chown -R $$PUID:$$PGID /data 2>/dev/null || echo 'Storage: proprietà gestite dal filesystem host')"]
+    volumes: [app-storage:/data]
+
+  migrate:
+    build: { context: ., dockerfile: candidature-hub/app/Dockerfile }
+    command: ["pnpm", "exec", "prisma", "migrate", "deploy"]
+    environment: *common-env
+    depends_on: { db: { condition: service_healthy } }
+    restart: "no"
+
+  app:
+    build: { context: ., dockerfile: candidature-hub/app/Dockerfile }
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NAME: ${ADMIN_NAME:-Amministratore}
+    user: "${PUID:-1000}:${PGID:-1000}"
+    ports: ["${APP_PORT:-3031}:3031"]
+    volumes: [app-storage:/data]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      storage-init: { condition: service_completed_successfully }
+      clamav: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3031/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  parser:
+    build: { context: ., dockerfile: Dockerfile.worker }
+    restart: unless-stopped
+    command: ["python", "/opt/candidature-hub/parser/parser.py"]
+    environment: *common-env
+    user: "${PUID:-1000}:${PGID:-1000}"
+    volumes: [app-storage:/data]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      storage-init: { condition: service_completed_successfully }
+      clamav: { condition: service_healthy }
+
+  mail-worker:
+    build: { context: ., dockerfile: Dockerfile.worker }
+    restart: unless-stopped
+    command: ["python", "/opt/candidature-hub/mail2pdf/mail_pdf_downloader.py"]
+    environment: *common-env
+    user: "${PUID:-1000}:${PGID:-1000}"
+    volumes: [app-storage:/data]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      storage-init: { condition: service_completed_successfully }
+      clamav: { condition: service_healthy }
+
+  restore:
+    profiles: [tools]
+    build: { context: ., dockerfile: candidature-hub/app/Dockerfile }
+    entrypoint: ["/opt/candidature-hub/scripts/restore.sh"]
+    environment: *common-env
+    volumes: [app-storage:/data]
+    depends_on: { db: { condition: service_healthy } }
+
+volumes:
+  postgres-data:
+  app-storage:
+  clamav-data:

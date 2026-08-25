@@ -4,6 +4,7 @@ export const revalidate = 0;
 import { prisma } from "../../../lib/prisma";
 import type { Candidate, Interview, CvFile } from "@prisma/client";
 import { InterviewForm } from "../InterviewForm";
+import { requireUser } from "../../../lib/auth";
 
 type Params = {
   id?: string;
@@ -21,6 +22,7 @@ function normalizeStr(v: string | string[] | undefined): string | undefined {
 }
 
 export default async function DetailPage({ params, searchParams }: PageProps) {
+  await requireUser();
   const { id: idParam } = await params;
   const search = await searchParams;
 

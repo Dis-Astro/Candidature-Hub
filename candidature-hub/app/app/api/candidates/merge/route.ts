@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { pool } from "@/lib/db";
+import { authorizeRequest, isAuthError } from "@/lib/auth";
+import { NextRequest } from "next/server";
 
 type MergeBody = {
   targetId: string;   // può essere id interno (cv_...) oppure displayId numerico
   sourceIds: string[]; // sempre id interni (cv_...)
 };
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const auth = await authorizeRequest(req, ["ADMIN", "RECRUITER"], true);
+  if (isAuthError(auth)) return auth;
   let body: MergeBody;
   try {
     body = await req.json();
@@ -89,10 +93,23 @@ export async function POST(req: Request) {
       [canonicalTargetId, uniqueSourceIds]
     );
 
-    const tagRes = await client.query(
-      'UPDATE "candidate_tags" SET "candidateId" = $1 WHERE "candidateId" = ANY($2::text[])',
+    const attRes = await client.query(
+      'UPDATE "attachments" SET "candidateId" = $1 WHERE "candidateId" = ANY($2::text[])',
       [canonicalTargetId, uniqueSourceIds]
     );
+
+    const importRes = await client.query(
+      'UPDATE "import_events" SET "candidateId" = $1 WHERE "candidateId" = ANY($2::text[])',
+      [canonicalTargetId, uniqueSourceIds]
+    );
+
+    const tagRes = await client.query(
+      `INSERT INTO "candidate_tags" ("candidateId", "tagId")
+       SELECT $1, "tagId" FROM "candidate_tags" WHERE "candidateId" = ANY($2::text[])
+       ON CONFLICT DO NOTHING`,
+      [canonicalTargetId, uniqueSourceIds]
+    );
+    await client.query('DELETE FROM "candidate_tags" WHERE "candidateId" = ANY($1::text[])', [uniqueSourceIds]);
 
     // Cancelliamo i candidati sorgente
     const delRes = await client.query(
@@ -109,6 +126,8 @@ export async function POST(req: Request) {
       moved: {
         cvFiles: cvRes.rowCount,
         interviews: intRes.rowCount,
+        attachments: attRes.rowCount,
+        importEvents: importRes.rowCount,
         tags: tagRes.rowCount,
       },
       deletedCandidates: delRes.rowCount,

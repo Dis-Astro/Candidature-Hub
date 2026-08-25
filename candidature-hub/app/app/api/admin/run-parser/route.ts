@@ -1,19 +1,10 @@
-import { NextResponse } from "next/server";
-import { exec } from "child_process";
-import { promisify } from "util";
+import { NextRequest, NextResponse } from "next/server";
+import { authorizeRequest, isAuthError } from "../../../../lib/auth";
+import { prisma } from "../../../../lib/prisma";
 
-const execAsync = promisify(exec);
-
-export async function POST() {
-  try {
-    // Avvia parser.service via systemctl (one-shot)
-    await execAsync("systemctl start parser.service", { timeout: 10000 });
-    return NextResponse.json({ ok: true, message: "Parser avviato con successo" });
-  } catch (e: unknown) {
-    const err = e as { stderr?: string; message?: string };
-    return NextResponse.json(
-      { error: err.stderr || err.message || String(e) },
-      { status: 500 }
-    );
-  }
+export async function POST(req: NextRequest) {
+  const auth = await authorizeRequest(req, ["ADMIN"], true);
+  if (isAuthError(auth)) return auth;
+  const cfg = await prisma.systemConfig.findUnique({ where: { id: "main" }, select: { parserPollSeconds: true } });
+  return NextResponse.json({ ok: true, message: `Il parser Docker acquisirà i nuovi PDF entro ${cfg?.parserPollSeconds || 30} secondi.` });
 }

@@ -4,6 +4,7 @@ export const revalidate = 0;
 import { prisma } from "@/lib/prisma";
 import type { Candidate, Interview, CvFile } from "@prisma/client";
 import { InterviewForm } from "../InterviewForm";
+import { requireUser } from "@/lib/auth";
 
 type CandidateWithRelations = Candidate & {
   interviews: Interview[];
@@ -17,6 +18,7 @@ type DetailPageProps = {
 };
 
 export default async function DetailPage({ searchParams }: DetailPageProps) {
+  await requireUser();
   const { id } = await searchParams;
 
   if (!id) {

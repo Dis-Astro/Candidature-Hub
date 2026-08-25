@@ -4,12 +4,13 @@ import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 import crypto from "crypto";
+import { authorizeRequest, isAuthError } from "../../../lib/auth";
+import { scanBuffer } from "../../../lib/antivirus";
 
-// Base path per allegati su NAS
+// Base path per allegati nello storage permanente
 async function getAttachmentsBasePath(): Promise<string> {
   const cfg = await prisma.systemConfig.findUnique({ where: { id: "main" } });
-  const nasPath = cfg?.nasPath || "/mnt/nas_curriculum";
-  return path.join(nasPath, "attachments");
+  return cfg?.attachmentsPath || "/data/attachments";
 }
 
 // Tipi MIME consentiti (allowlist stretta)
@@ -35,6 +36,17 @@ const ALLOWED_MIME_TYPES = new Set([
 
 // Max 50MB
 const MAX_SIZE = 50 * 1024 * 1024;
+const ATTACHMENT_TYPES = new Set(["CV", "AUDIO_COLLOQUIO", "DOCUMENTO", "IMMAGINE", "NOTE", "ALTRO"]);
+
+function signatureMatches(buffer: Buffer, mime: string): boolean {
+  const hex = buffer.subarray(0, 12).toString("hex");
+  if (mime === "application/pdf") return buffer.subarray(0, 5).toString() === "%PDF-";
+  if (mime === "image/png") return hex.startsWith("89504e470d0a1a0a");
+  if (mime === "image/jpeg") return hex.startsWith("ffd8ff");
+  if (mime === "image/gif") return buffer.subarray(0, 4).toString() === "GIF8";
+  if (mime.includes("openxmlformats")) return hex.startsWith("504b0304");
+  return buffer.length > 0;
+}
 
 // Mappa MIME → AttachmentType
 function inferType(mimeType: string): "CV" | "AUDIO_COLLOQUIO" | "DOCUMENTO" | "IMMAGINE" | "NOTE" | "ALTRO" {
@@ -101,6 +113,8 @@ async function logAudit(action: string, entity: string, entityId?: string, detai
  */
 export async function POST(req: NextRequest) {
   try {
+    const auth = await authorizeRequest(req, ["ADMIN", "RECRUITER"], true);
+    if (isAuthError(auth)) return auth;
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const candidateId = formData.get("candidateId") as string | null;
@@ -127,6 +141,9 @@ export async function POST(req: NextRequest) {
         { error: `Tipo file non consentito: ${file.type}. Formati accettati: PDF, immagini (JPG/PNG/GIF), audio (MP3/WAV/M4A), documenti Word.` },
         { status: 400 }
       );
+    }
+    if (typeOverride && !ATTACHMENT_TYPES.has(typeOverride)) {
+      return NextResponse.json({ error: "Categoria allegato non valida" }, { status: 400 });
     }
 
     // Verifica candidato esiste
@@ -156,8 +173,16 @@ export async function POST(req: NextRequest) {
 
     const filePath = path.join(candidateDir, storageName);
 
-    // Scrivi file
     const buffer = Buffer.from(await file.arrayBuffer());
+    if (!signatureMatches(buffer, file.type)) {
+      return NextResponse.json({ error: "Il contenuto del file non corrisponde al formato dichiarato" }, { status: 400 });
+    }
+    const scan = await scanBuffer(buffer);
+    if (!scan.clean) {
+      await prisma.auditLog.create({ data: { action: "ANTIVIRUS_BLOCK", entity: "Attachment", entityId: candidateId, details: JSON.stringify({ filename: originalFilename, threat: scan.threat }), userId: auth.id } });
+      return NextResponse.json({ error: `File bloccato dall'antivirus (${scan.threat})` }, { status: 422 });
+    }
+    // Scrivi file
     await writeFile(filePath, buffer);
 
     // Salva in DB (conserva nome originale per download)
@@ -204,6 +229,8 @@ export async function POST(req: NextRequest) {
  */
 export async function GET(req: NextRequest) {
   try {
+    const auth = await authorizeRequest(req, ["ADMIN", "RECRUITER", "VIEWER"]);
+    if (isAuthError(auth)) return auth;
     const { searchParams } = new URL(req.url);
     const candidateId = searchParams.get("candidateId");
 

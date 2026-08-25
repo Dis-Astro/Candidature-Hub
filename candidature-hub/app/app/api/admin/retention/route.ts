@@ -3,12 +3,16 @@ import { prisma } from "../../../../lib/prisma";
 import { unlink, rmdir } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
+import { authorizeRequest, isAuthError } from "../../../../lib/auth";
 
-// Base path per allegati su NAS
+function isWithin(file: string, root: string) {
+  return path.resolve(file).startsWith(path.resolve(root) + path.sep);
+}
+
+// Base path per allegati nello storage permanente
 async function getAttachmentsBasePath(): Promise<string> {
   const cfg = await prisma.systemConfig.findUnique({ where: { id: "main" } });
-  const nasPath = cfg?.nasPath || "/mnt/nas_curriculum";
-  return path.join(nasPath, "attachments");
+  return cfg?.attachmentsPath || "/data/attachments";
 }
 
 type RetentionReport = {
@@ -31,6 +35,8 @@ type RetentionReport = {
  */
 export async function GET(req: NextRequest) {
   try {
+    const auth = await authorizeRequest(req, ["ADMIN"]);
+    if (isAuthError(auth)) return auth;
     const { searchParams } = new URL(req.url);
     const daysParam = searchParams.get("days");
     const days = daysParam ? parseInt(daysParam, 10) : 0;
@@ -71,7 +77,7 @@ export async function GET(req: NextRequest) {
     const report: RetentionReport = {
       candidatesCount: candidates.length,
       attachmentsCount: attachmentsCount + cvFilesCount,
-      filesCount: attachmentsCount + cvFilesCount, // file su NAS
+      filesCount: attachmentsCount + cvFilesCount, // file nello storage
       candidates: candidates.map(c => ({
         id: c.id,
         displayId: c.displayId,
@@ -96,6 +102,8 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
+    const auth = await authorizeRequest(req, ["ADMIN"], true);
+    if (isAuthError(auth)) return auth;
     const body = await req.json();
     const { days, confirm } = body;
 
@@ -128,16 +136,19 @@ export async function POST(req: NextRequest) {
     }
 
     const basePath = await getAttachmentsBasePath();
+    const cfg = await prisma.systemConfig.findUnique({ where: { id: "main" } });
+    const processedPath = cfg?.processedPath || "/data/processed";
     let filesDeleted = 0;
     let attachmentsDeleted = 0;
     let cvFilesDeleted = 0;
     const errors: string[] = [];
 
     for (const candidate of candidates) {
-      // 1. Elimina file allegati da NAS
+      // 1. Elimina file allegati dallo storage
       for (const att of candidate.attachments) {
         if (att.path && existsSync(att.path)) {
           try {
+            if (!isWithin(att.path, basePath)) throw new Error("path fuori dalla cartella allegati");
             await unlink(att.path);
             filesDeleted++;
           } catch (e) {
@@ -146,10 +157,11 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 2. Elimina file CV da NAS
+      // 2. Elimina file CV dallo storage
       for (const cv of candidate.cvFiles) {
         if (cv.path && existsSync(cv.path)) {
           try {
+            if (!isWithin(cv.path, processedPath)) throw new Error("path fuori dalla cartella processed");
             await unlink(cv.path);
             filesDeleted++;
           } catch (e) {
@@ -170,6 +182,10 @@ export async function POST(req: NextRequest) {
 
       attachmentsDeleted += candidate.attachments.length;
       cvFilesDeleted += candidate.cvFiles.length;
+    }
+
+    if (errors.length > 0) {
+      return NextResponse.json({ error: "Pulizia interrotta: alcuni file non sono stati eliminati", errors: errors.slice(0, 10) }, { status: 409 });
     }
 
     // 4. Elimina record dal DB (cascade elimina attachments, cvFiles, interviews, etc)

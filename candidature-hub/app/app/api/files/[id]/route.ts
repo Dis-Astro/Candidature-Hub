@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import fs from "node:fs";
 import path from "node:path";
+import { authorizeRequest, isAuthError } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
+  const auth = await authorizeRequest(req, ["ADMIN", "RECRUITER", "VIEWER"]);
+  if (isAuthError(auth)) return auth;
   // ⬅️ differenza importante: params è una Promise
   const { id: token } = await ctx.params;
 
@@ -48,6 +51,10 @@ export async function GET(
   const filePath = cv.path;
 
   try {
+    const config = await prisma.systemConfig.findUnique({ where: { id: "main" }, select: { processedPath: true } });
+    const root = path.resolve(config?.processedPath || "/data/processed");
+    const resolved = path.resolve(filePath);
+    if (!resolved.startsWith(root + path.sep)) return NextResponse.json({ error: "unsafe file path" }, { status: 403 });
     const data = await fs.promises.readFile(filePath);
     const filename = path.basename(filePath);
 

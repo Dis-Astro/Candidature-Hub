@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../../../lib/prisma";
+import { authorizeRequest, isAuthError } from "../../../../../lib/auth";
 
 /**
  * POST /api/candidates/[id]/quick-action
@@ -17,6 +18,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await authorizeRequest(req, ["ADMIN", "RECRUITER"], true);
+    if (isAuthError(auth)) return auth;
     const { id } = await params;
     const body = await req.json();
     const action = body.action as string;
@@ -36,14 +39,14 @@ export async function POST(
     if (action === "discard") {
       await prisma.candidate.update({
         where: { id: candidate.id },
-        data: { discarded: true, updatedAt: new Date() },
+        data: { discarded: true, status: "SCARTATO", updatedAt: new Date() },
       });
       result = { ok: true, action: "discarded", displayId: candidate.displayId };
 
     } else if (action === "restore") {
       await prisma.candidate.update({
         where: { id: candidate.id },
-        data: { discarded: false, rating: null, updatedAt: new Date() },
+        data: { discarded: false, rating: null, status: "DA_VALUTARE", updatedAt: new Date() },
       });
       // Reset decision nell'ultimo interview se esiste
       const lastInterview = await prisma.interview.findFirst({
@@ -61,14 +64,14 @@ export async function POST(
     } else if (action === "shortlist" || action === "approve") {
       await prisma.candidate.update({
         where: { id: candidate.id },
-        data: { rating: 5, discarded: false, updatedAt: new Date() },
+        data: { rating: 5, discarded: false, status: "SHORTLIST", updatedAt: new Date() },
       });
       result = { ok: true, action: "shortlist", displayId: candidate.displayId };
 
     } else if (action === "hire") {
       await prisma.candidate.update({
         where: { id: candidate.id },
-        data: { discarded: false, updatedAt: new Date() },
+        data: { discarded: false, status: "ASSUMERE", updatedAt: new Date() },
       });
       // Imposta decision=ASSUME nell'ultimo interview
       const lastInterview = await prisma.interview.findFirst({

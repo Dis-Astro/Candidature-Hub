@@ -3,10 +3,16 @@
 import { useState, useEffect } from "react";
 
 type Config = {
-  // NAS
-  nasPath: string;
+  storageMode: string;
+  storageRoot: string;
+  mailInboxPath: string;
+  manualInboxPath: string;
   processedPath: string;
+  attachmentsPath: string;
+  backupPath: string;
+  errorPath: string;
   // IMAP (mail2pdf)
+  mailEnabled: boolean;
   imapHost: string;
   imapPort: number;
   imapUser: string;
@@ -16,6 +22,9 @@ type Config = {
   postAction: string;
   moveFolder: string;
   retentionDays: number;
+  mailRetentionDays: number;
+  backupRetentionDays: number;
+  errorRetentionDays: number;
   // SMTP Alert
   alertTo: string;
   smtpHost: string;
@@ -23,7 +32,7 @@ type Config = {
   smtpUser: string;
   smtpPass: string;
   // Parser
-  parserTimerSec: number;
+  parserPollSeconds: number;
   ocrEnabled: boolean;
   // Database esterno
   useExternalDb: boolean;
@@ -49,8 +58,15 @@ type RetentionReport = {
 } | null;
 
 const DEFAULT_CONFIG: Config = {
-  nasPath: "/mnt/nas_curriculum/mail2pdf",
-  processedPath: "/mnt/nas_curriculum/mail2pdf/processed",
+  storageMode: "docker-volume",
+  storageRoot: "/data",
+  mailInboxPath: "inbox/mail",
+  manualInboxPath: "inbox/manual",
+  processedPath: "processed",
+  attachmentsPath: "attachments",
+  backupPath: "backups",
+  errorPath: "error",
+  mailEnabled: false,
   imapHost: "",
   imapPort: 993,
   imapUser: "",
@@ -60,12 +76,15 @@ const DEFAULT_CONFIG: Config = {
   postAction: "move",
   moveFolder: "Processed",
   retentionDays: 365,
+  mailRetentionDays: 90,
+  backupRetentionDays: 30,
+  errorRetentionDays: 30,
   alertTo: "",
   smtpHost: "",
   smtpPort: 587,
   smtpUser: "",
   smtpPass: "",
-  parserTimerSec: 60,
+  parserPollSeconds: 30,
   ocrEnabled: false,
   // Database esterno
   useExternalDb: false,
@@ -82,6 +101,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [runningParser, setRunningParser] = useState(false);
+  const [testingMail, setTestingMail] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   // GDPR Retention state
@@ -93,14 +113,73 @@ export default function AdminPage() {
   const [loadingRetention, setLoadingRetention] = useState(false);
   const [executingRetention, setExecutingRetention] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [backups, setBackups] = useState<Array<{ name: string; size: number }>>([]);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [users, setUsers] = useState<Array<{ id: string; email: string; name: string | null; role: string }>>([]);
 
   useEffect(() => {
     fetch("/api/admin/config")
       .then((r) => (r.ok ? r.json() : DEFAULT_CONFIG))
-      .then((data) => setConfig({ ...DEFAULT_CONFIG, ...data }))
+      .then((data) => {
+        const relative = (value: string) => value?.startsWith("/data/") ? value.slice(6) : value;
+        setConfig({
+          ...DEFAULT_CONFIG,
+          ...data,
+          mailInboxPath: relative(data.mailInboxPath),
+          manualInboxPath: relative(data.manualInboxPath),
+          processedPath: relative(data.processedPath),
+          attachmentsPath: relative(data.attachmentsPath),
+          backupPath: relative(data.backupPath),
+          errorPath: relative(data.errorPath),
+        });
+      })
       .catch(() => setConfig(DEFAULT_CONFIG))
       .finally(() => setLoading(false));
   }, []);
+
+  async function loadBackups() {
+    const response = await fetch("/api/admin/backups");
+    if (response.ok) setBackups((await response.json()).backups || []);
+  }
+
+  useEffect(() => { void loadBackups(); }, []);
+  async function loadUsers() { const response = await fetch("/api/admin/users"); if (response.ok) setUsers((await response.json()).users || []); }
+  useEffect(() => { void loadUsers(); }, []);
+
+  async function saveUser(form: FormData) {
+    const response = await fetch("/api/admin/users", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(form)) });
+    const body = await response.json().catch(() => ({}));
+    setMessage(response.ok ? { type: "ok", text: "Utente salvato" } : { type: "err", text: body.error || "Errore utente" });
+    if (response.ok) await loadUsers();
+  }
+
+  async function createBackup() {
+    setBackupBusy(true);
+    try {
+      const response = await fetch("/api/admin/backups", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      if (!response.ok) throw new Error(await response.text());
+      await loadBackups();
+    } catch (error) { setMessage({ type: "err", text: String(error) }); }
+    finally { setBackupBusy(false); }
+  }
+
+  async function uploadBackup(file: File) {
+    setBackupBusy(true);
+    try {
+      const response = await fetch("/api/admin/backups", { method: "POST", headers: { "content-type": "application/gzip", "x-backup-name": file.name }, body: file });
+      if (!response.ok) throw new Error(await response.text());
+      await loadBackups();
+    } catch (error) { setMessage({ type: "err", text: String(error) }); }
+    finally { setBackupBusy(false); }
+  }
+
+  async function uploadCurricula(files: FileList) {
+    const form = new FormData();
+    Array.from(files).forEach(file => form.append("files", file));
+    const response = await fetch("/api/admin/ingest", { method: "POST", body: form });
+    const body = await response.json().catch(() => ({}));
+    setMessage(response.ok ? { type: "ok", text: body.message } : { type: "err", text: body.error || "Caricamento fallito" });
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -135,6 +214,25 @@ export default function AdminPage() {
     }
   }
 
+  async function handleTestMail() {
+    setTestingMail(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/test-mail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Verifica non riuscita");
+      setMessage({ type: "ok", text: data.message });
+    } catch (e) {
+      setMessage({ type: "err", text: String(e) });
+    } finally {
+      setTestingMail(false);
+    }
+  }
+
   function update<K extends keyof Config>(key: K, value: Config[K]) {
     setConfig((prev) => ({ ...prev, [key]: value }));
   }
@@ -144,10 +242,10 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6 p-0 sm:p-2">
       <h1 className="text-2xl font-bold">Gestione Sistema</h1>
       <p className="text-sm text-gray-600">
-        Configura percorsi NAS, parametri IMAP/SMTP e parser. Solo ADMIN.
+        Scegli le cartelle di lavoro, configura la casella email, il parser e i backup. Solo ADMIN.
       </p>
 
       {message && (
@@ -162,32 +260,42 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* NAS */}
+      {/* Storage */}
       <section className="border rounded-lg p-4 space-y-3">
-        <h2 className="font-semibold text-lg">Percorsi NAS</h2>
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700">Cartella CV in ingresso</label>
-            <input
-              className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
-              value={config.nasPath}
-              onChange={(e) => update("nasPath", e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700">Cartella CV elaborati</label>
-            <input
-              className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
-              value={config.processedPath}
-              onChange={(e) => update("processedPath", e.target.value)}
-            />
-          </div>
+        <h2 className="font-semibold text-lg">Archivio e destinazione dei file</h2>
+        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          <p><strong>Archivio permanente gestito dall&apos;app.</strong></p>
+          <p className="mt-1 text-xs">Non dipende da un NAS. Indica le cartelle in cui far confluire i diversi file; quelle mancanti vengono create automaticamente e tutto viene incluso nei backup.</p>
         </div>
+        <div className="grid md:grid-cols-2 gap-4">
+          {([
+            ["mailInboxPath", "CV ricevuti via email"],
+            ["manualInboxPath", "CV inseriti/scansionati manualmente"],
+            ["processedPath", "CV elaborati"],
+            ["attachmentsPath", "Allegati candidati"],
+            ["backupPath", "Backup esportabili"],
+            ["errorPath", "PDF non elaborabili"],
+          ] as const).map(([key, label]) => <div key={key}>
+            <label className="block text-xs font-medium text-gray-700">{label}</label>
+            <input className="mt-1 w-full border rounded-md px-3 py-2 text-sm" value={config[key]} onChange={(e) => update(key, e.target.value)} placeholder="es. archivio/curriculum" />
+          </div>)}
+        </div>
+        <button type="button" className="text-sm text-blue-700 underline" onClick={() => setConfig(prev => ({
+          ...prev,
+          mailInboxPath: DEFAULT_CONFIG.mailInboxPath,
+          manualInboxPath: DEFAULT_CONFIG.manualInboxPath,
+          processedPath: DEFAULT_CONFIG.processedPath,
+          attachmentsPath: DEFAULT_CONFIG.attachmentsPath,
+          backupPath: DEFAULT_CONFIG.backupPath,
+          errorPath: DEFAULT_CONFIG.errorPath,
+        }))}>Ripristina cartelle consigliate</button>
       </section>
 
       {/* IMAP */}
       <section className="border rounded-lg p-4 space-y-3">
-        <h2 className="font-semibold text-lg">IMAP (mail2pdf)</h2>
+        <h2 className="font-semibold text-lg">Casella email dei curriculum</h2>
+        <p className="text-sm text-gray-600">Puoi cambiare questi parametri in qualsiasi momento. Il lettore email li applica senza riavviare Docker.</p>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={config.mailEnabled} onChange={(e) => update("mailEnabled", e.target.checked)} />Acquisizione email abilitata</label>
         <div className="grid md:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium text-gray-700">Host IMAP</label>
@@ -262,7 +370,14 @@ export default function AdminPage() {
               disabled={config.postAction !== "move"}
             />
           </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700">Conserva email elaborate (giorni)</label>
+            <input type="number" min={1} className="mt-1 w-full rounded-md border px-3 py-2 text-sm" value={config.mailRetentionDays} onChange={(e) => update("mailRetentionDays", Number(e.target.value))} />
+          </div>
         </div>
+        <button type="button" onClick={handleTestMail} disabled={testingMail || !config.imapHost || !config.imapUser} className="rounded-md border border-teal-700 px-4 py-2 text-sm font-medium text-teal-800 disabled:opacity-50">
+          {testingMail ? "Verifica in corso..." : "Verifica collegamento email"}
+        </button>
       </section>
 
       {/* Retention GDPR */}
@@ -271,7 +386,7 @@ export default function AdminPage() {
           <h2 className="font-semibold text-lg">Cancellazione Automatica Candidati (GDPR)</h2>
           <p className="text-sm text-gray-600 mt-1">
             Elimina automaticamente i dati dei candidati <strong>SCARTATI</strong> più vecchi di X giorni.
-            L&apos;azione rimuoverà il record dal database e i file associati dal NAS.
+            L&apos;azione rimuoverà il record dal database e i file associati dall&apos;archivio.
           </p>
         </div>
 
@@ -338,7 +453,7 @@ export default function AdminPage() {
         {retentionReport && (
           <div className="border rounded-lg p-4 bg-amber-50 space-y-3">
             <h3 className="font-semibold text-amber-900">Report simulazione</h3>
-            <div className="grid grid-cols-3 gap-4 text-sm">
+            <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3 sm:gap-4">
               <div className="bg-white rounded p-3 text-center">
                 <div className="text-2xl font-bold text-amber-700">{retentionReport.candidatesCount}</div>
                 <div className="text-xs text-gray-600">Candidati</div>
@@ -349,7 +464,7 @@ export default function AdminPage() {
               </div>
               <div className="bg-white rounded p-3 text-center">
                 <div className="text-2xl font-bold text-amber-700">{retentionReport.filesCount}</div>
-                <div className="text-xs text-gray-600">File NAS</div>
+                <div className="text-xs text-gray-600">File archivio</div>
               </div>
             </div>
 
@@ -400,7 +515,7 @@ export default function AdminPage() {
               <ul className="mt-2 text-sm space-y-1">
                 <li>• <strong>{retentionReport.candidatesCount}</strong> candidati</li>
                 <li>• <strong>{retentionReport.attachmentsCount}</strong> allegati</li>
-                <li>• <strong>{retentionReport.filesCount}</strong> file dal NAS</li>
+                <li>• <strong>{retentionReport.filesCount}</strong> file dall&apos;archivio</li>
               </ul>
               <p className="mt-4 text-sm font-semibold text-red-700">
                 ⚠️ Questa azione NON può essere annullata.
@@ -505,8 +620,8 @@ export default function AdminPage() {
             <input
               type="number"
               className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
-              value={config.parserTimerSec}
-              onChange={(e) => update("parserTimerSec", Number(e.target.value))}
+              value={config.parserPollSeconds}
+              onChange={(e) => update("parserPollSeconds", Number(e.target.value))}
             />
           </div>
           <div className="flex items-center gap-2 pt-5">
@@ -560,7 +675,7 @@ export default function AdminPage() {
           <>
             <div className="p-3 bg-red-50 border border-red-200 rounded-md">
               <p className="text-sm text-red-700 font-medium">
-                ⚠️ ATTENZIONE: la password è salvata in chiaro nella configurazione.
+                La password viene cifrata prima del salvataggio. Usa comunque un account PostgreSQL dedicato con privilegi limitati.
               </p>
             </div>
 
@@ -678,13 +793,37 @@ export default function AdminPage() {
         {config.useExternalDb && (
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
             <p className="text-sm text-blue-800 font-medium">
-              ℹ️ Dopo aver salvato, per applicare le modifiche riavvia i servizi:
+              Questo profilo serve per verificare un database di destinazione. Per spostare l&apos;app usa un backup e aggiorna DATABASE_URL nel file .env Docker.
             </p>
             <code className="block mt-2 p-2 bg-white rounded text-xs font-mono">
-              sudo systemctl restart app.service parser.service
+              docker compose --profile tools run --rm restore /data/backups/NOME-BACKUP.tar.gz
             </code>
           </div>
         )}
+      </section>
+
+      <section className="border rounded-lg p-4 space-y-3">
+        <div className="border-b pb-4 space-y-3">
+          <h2 className="font-semibold text-lg">Utenti e ruoli</h2>
+          <form action={saveUser} className="grid gap-2 md:grid-cols-4">
+            <input name="name" placeholder="Nome" className="rounded border px-3 py-2 text-sm" />
+            <input name="email" type="email" required placeholder="email@azienda.it" className="rounded border px-3 py-2 text-sm" />
+            <input name="password" type="password" minLength={12} required placeholder="Password (min. 12)" className="rounded border px-3 py-2 text-sm" />
+            <div className="flex gap-2"><select name="role" className="flex-1 rounded border px-2 text-sm"><option>VIEWER</option><option>RECRUITER</option><option>ADMIN</option></select><button className="rounded bg-slate-800 px-3 text-sm text-white">Salva</button></div>
+          </form>
+          <div className="divide-y rounded border">{users.map(user => <div key={user.id} className="flex justify-between p-2 text-sm"><span>{user.name || user.email} · {user.role}</span><button type="button" className="text-red-700" onClick={async () => { if (confirm(`Eliminare ${user.email}?`)) { await fetch(`/api/admin/users?id=${encodeURIComponent(user.id)}`, { method: "DELETE" }); await loadUsers(); } }}>Elimina</button></div>)}</div>
+        </div>
+        <div className="flex items-center justify-between"><div><h2 className="font-semibold text-lg">Backup e migrazione</h2><p className="text-xs text-slate-500">Ogni archivio contiene database PostgreSQL e tutto lo storage. Il ripristino si applica a servizi fermi.</p></div><button type="button" onClick={createBackup} disabled={backupBusy} className="rounded bg-indigo-600 px-4 py-2 text-sm text-white disabled:opacity-50">Crea backup</button></div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="text-sm">Conserva backup (giorni)<input type="number" min={1} className="mt-1 w-full rounded border px-3 py-2" value={config.backupRetentionDays} onChange={e => update("backupRetentionDays", Number(e.target.value))} /></label>
+          <label className="text-sm">Conserva file con errore (giorni)<input type="number" min={1} className="mt-1 w-full rounded border px-3 py-2" value={config.errorRetentionDays} onChange={e => update("errorRetentionDays", Number(e.target.value))} /></label>
+        </div>
+        <label className="inline-flex cursor-pointer rounded border px-3 py-2 text-sm">Importa archivio<input type="file" accept=".gz" className="sr-only" disabled={backupBusy} onChange={e => { const file = e.target.files?.[0]; if (file) void uploadBackup(file); }} /></label>
+        <div className="divide-y rounded border">
+          {backups.map(item => <div key={item.name} className="flex items-center justify-between p-2 text-sm"><span className="font-mono text-xs">{item.name} ({(item.size / 1048576).toFixed(1)} MB)</span><a className="text-blue-700 underline" href={`/api/admin/backups?download=${encodeURIComponent(item.name)}`}>Scarica</a></div>)}
+          {backups.length === 0 && <p className="p-3 text-sm text-slate-500">Nessun backup disponibile.</p>}
+        </div>
+        <div className="border-t pt-3"><label className="inline-flex cursor-pointer rounded bg-teal-700 px-4 py-2 text-sm text-white">Carica CV manualmente<input type="file" accept="application/pdf,.pdf" multiple className="sr-only" onChange={e => { if (e.target.files) void uploadCurricula(e.target.files); }} /></label><p className="mt-1 text-xs text-slate-500">Fino a 50 PDF; vengono depositati nella cartella manuale e acquisiti ricorsivamente dal parser.</p></div>
       </section>
 
       {/* Salva */}

@@ -3,6 +3,7 @@
 import { prisma } from "../../../lib/prisma";
 import { redirect } from "next/navigation";
 import type { Decision } from "@prisma/client";
+import { requireUser } from "../../../lib/auth";
 
 /**
  * Aggiorna SOLO l'anagrafica del candidato
@@ -10,6 +11,7 @@ import type { Decision } from "@prisma/client";
  */
 export async function updateCandidateAction(formData: FormData) {
   "use server";
+  await requireUser(["ADMIN", "RECRUITER"]);
 
   const candidateId = String(formData.get("candidateId") ?? "");
 
@@ -49,6 +51,7 @@ export async function updateCandidateAction(formData: FormData) {
  */
 export async function saveInterviewAction(formData: FormData) {
   "use server";
+  await requireUser(["ADMIN", "RECRUITER"]);
 
   const candidateId = String(formData.get("candidateId") ?? "");
 
@@ -142,13 +145,22 @@ export async function saveInterviewAction(formData: FormData) {
     .toString()
     .trim() || null;
 
-  // ✅ Certificazione scemo (hidden "scemoCertified" gestito dai pulsanti nel client)
-  const scemoRaw = formData.get("scemoCertified");
-  const scemoCertified =
-    scemoRaw === "true" ? true : scemoRaw === "false" ? false : null;
+  const verifiedRaw = formData.get("profileVerified");
+  const profileVerified = verifiedRaw === "true" ? true : verifiedRaw === "false" ? false : null;
+  const createNewInterview = formData.get("saveMode") === "new";
 
-  // --- Aggiorniamo anche il candidato (rating, mansione, arma vincente, ecc.) ---
-  const candidate = await prisma.candidate.update({
+  const status = decision === "ASSUME" ? "ASSUMERE"
+    : decision === "SCARTA" ? "SCARTATO"
+    : rating !== null && rating >= 5 ? "SHORTLIST" : "DA_VALUTARE";
+  const interviewData = {
+    interviewer, notes, hrNotes, score: rating, birthPlaceDate, residence, education,
+    drivingLicense: drivingLicensesCsv, trainingCourses, travelAvailability, currentJobStatus,
+    possibleStartDate, requestedSalary, experiences, skills, knownSoftware, outcome, decision,
+    appliedRoles: mansioneCsv, profileVerified: profileVerified ?? false,
+  };
+
+  const candidate = await prisma.$transaction(async (tx) => {
+    const updated = await tx.candidate.update({
     where: { id: candidateId },
     data: {
       firstName,
@@ -160,73 +172,36 @@ export async function saveInterviewAction(formData: FormData) {
       rating: rating ?? undefined,
       interviewed: true,
       interviewedAt: new Date(),
+      discarded: status === "SCARTATO",
+      status,
     },
     select: {
       id: true,
       displayId: true,
     },
-  });
+    });
 
   // --- Colloquio: se esiste l'ultimo, lo aggiorniamo; altrimenti ne creiamo uno nuovo ---
-  const existingInterview = await prisma.interview.findFirst({
+  const existingInterview = await tx.interview.findFirst({
     where: { candidateId },
     orderBy: { date: "desc" },
   });
 
-  if (existingInterview) {
-    await prisma.interview.update({
+  if (existingInterview && !createNewInterview) {
+    await tx.interview.update({
       where: { id: existingInterview.id },
       data: {
-        interviewer,
-        notes,
-        hrNotes,
-        score: rating,
-        birthPlaceDate,
-        residence,
-        education,
-        drivingLicense: drivingLicensesCsv,
-        trainingCourses,
-        travelAvailability,
-        currentJobStatus,
-        possibleStartDate,
-        requestedSalary,
-        experiences,
-        skills,
-        knownSoftware,
-        outcome,
-        decision,
-        appliedRoles: mansioneCsv,
-        scemoCertified: scemoCertified ?? undefined,
+        ...interviewData,
+        profileVerified: profileVerified ?? existingInterview.profileVerified,
       },
     });
   } else {
-    await prisma.interview.create({
-      data: {
-        candidateId,
-        date: new Date(),
-        interviewer,
-        notes,
-        hrNotes,
-        score: rating,
-        birthPlaceDate,
-        residence,
-        education,
-        drivingLicense: drivingLicensesCsv,
-        trainingCourses,
-        travelAvailability,
-        currentJobStatus,
-        possibleStartDate,
-        requestedSalary,
-        experiences,
-        skills,
-        knownSoftware,
-        outcome,
-        decision,
-        appliedRoles: mansioneCsv,
-        scemoCertified: scemoCertified ?? false,
-      },
+    await tx.interview.create({
+      data: { candidateId, date: new Date(), ...interviewData },
     });
   }
+    return updated;
+  });
 
   // Dopo il salvataggio torniamo alla pagina del candidato (e si ricarica tutto)
   redirect(`/candidates/${candidate.displayId}`);

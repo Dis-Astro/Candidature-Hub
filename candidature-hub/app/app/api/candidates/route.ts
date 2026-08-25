@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
+import { authorizeRequest, isAuthError } from "../../../lib/auth";
 
 /**
  * POST /api/candidates
@@ -8,6 +9,8 @@ import { prisma } from "../../../lib/prisma";
  */
 export async function POST(req: NextRequest) {
   try {
+    const auth = await authorizeRequest(req, ["ADMIN", "RECRUITER"], true);
+    if (isAuthError(auth)) return auth;
     const body = await req.json();
     const { firstName, lastName, email, phone, mansione } = body;
 

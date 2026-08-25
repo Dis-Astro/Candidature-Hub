@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
+import { authorizeRequest, isAuthError } from "../../../../lib/auth";
 
 /**
  * GET /api/candidates/to-review
@@ -21,6 +22,8 @@ import { prisma } from "../../../../lib/prisma";
  */
 export async function GET(req: NextRequest) {
   try {
+    const auth = await authorizeRequest(req, ["ADMIN", "RECRUITER", "VIEWER"]);
+    if (isAuthError(auth)) return auth;
     const { searchParams } = new URL(req.url);
     const currentParam = searchParams.get("current");
     const currentDisplayId = currentParam ? parseInt(currentParam, 10) : null;
@@ -28,9 +31,7 @@ export async function GET(req: NextRequest) {
     // Query candidati "da valutare"
     const toReview = await prisma.candidate.findMany({
       where: {
-        interviewed: false,
-        discarded: false,
-        rating: null,
+        status: "DA_VALUTARE",
       },
       orderBy: { createdAt: "asc" },
       select: { displayId: true, id: true },

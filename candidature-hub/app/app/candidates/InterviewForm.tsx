@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { Candidate, Interview, CvFile } from "@prisma/client";
 import { saveInterviewAction, updateCandidateAction } from "./detail/actions";
 import { AttachmentsSection } from "./AttachmentsSection";
@@ -24,18 +24,7 @@ const MANSIONE_OPTIONS = [
 
 const PATENTE_OPTIONS = ["A", "B", "C", "D", "E", "CQC"];
 
-function hasScemoTag(text: string) { return /\[SCEMO\]/i.test(text); }
-function addScemoTag(text: string) {
-  if (hasScemoTag(text)) return text;
-  const t = (text ?? "").trim();
-  return t ? `${t}\n[SCEMO]` : "[SCEMO]";
-}
-function removeScemoTag(text: string) {
-  return (text ?? "").replace(/\[SCEMO\]/gi, "").replace(/\[\s*\]/g, "")
-    .replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-}
-
-export function InterviewForm({ candidate, lastInterview, previousInterviews = [] }: Props) {
+export function InterviewForm({ candidate, lastInterview }: Props) {
   const [firstName, setFirstName] = useState(candidate.firstName);
   const [lastName, setLastName] = useState(candidate.lastName);
   const [email, setEmail] = useState(candidate.email ?? "");
@@ -55,7 +44,7 @@ export function InterviewForm({ candidate, lastInterview, previousInterviews = [
   );
 
   const [interviewNotes, setInterviewNotes] = useState<string>(lastInterview?.notes ?? "");
-  const certified = useMemo(() => hasScemoTag(interviewNotes), [interviewNotes]);
+  const [profileVerified, setProfileVerified] = useState(lastInterview?.profileVerified ?? false);
 
   const [isSavingAnagrafica, setIsSavingAnagrafica] = useState(false);
   const [isSavingInterview, setIsSavingInterview] = useState(false);
@@ -77,10 +66,6 @@ export function InterviewForm({ candidate, lastInterview, previousInterviews = [
   function toggleLicense(code: string) {
     setDrivingLicenses(prev => prev.includes(code) ? prev.filter(r => r !== code) : [...prev, code]);
   }
-  function toggleCertifica() {
-    setInterviewNotes(prev => hasScemoTag(prev) ? removeScemoTag(prev) : addScemoTag(prev));
-  }
-
   async function handleUpdateAnagrafica(formData: FormData) {
     setIsSavingAnagrafica(true);
     try {
@@ -110,6 +95,7 @@ export function InterviewForm({ candidate, lastInterview, previousInterviews = [
       formData.delete("drivingLicenses");
       drivingLicenses.forEach(code => formData.append("drivingLicenses", code));
       formData.set("interviewNotes", interviewNotes);
+      formData.set("profileVerified", String(profileVerified));
       await saveInterviewAction(formData);
       window.location.reload();
     } finally { setIsSavingInterview(false); }
@@ -140,17 +126,6 @@ export function InterviewForm({ candidate, lastInterview, previousInterviews = [
 
   return (
     <div className="space-y-4 relative">
-      {/* === TIMBRO CERTIFICATO - sovrapposto a tutta la scheda === */}
-      {certified && (
-        <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50">
-          <img 
-            src="/logo.png" 
-            alt="Certificato" 
-            className="w-64 h-64 object-contain opacity-15 rotate-[-15deg]" 
-          />
-        </div>
-      )}
-      
       {/* === HEADER COMPATTO: Anagrafica + Meta === */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Anagrafica - 2/3 */}
@@ -161,13 +136,13 @@ export function InterviewForm({ candidate, lastInterview, previousInterviews = [
               {lastName && (
                 <span className="text-lg font-bold text-slate-700 flex items-center gap-2">
                   {lastName}
-                  {certified && <span className="text-amber-500">🏆</span>}
+                  {profileVerified && <span className="text-emerald-600" title="Profilo verificato">✓</span>}
                 </span>
               )}
             </div>
           </div>
           
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="block text-[11px] font-medium text-slate-500 uppercase tracking-wide">Nome</label>
               <input className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" value={firstName} onChange={e => setFirstName(e.target.value)} />
@@ -271,8 +246,8 @@ export function InterviewForm({ candidate, lastInterview, previousInterviews = [
           <div className="flex items-center gap-2">
             <input type="number" min={0} max={10} className="w-14 rounded border px-2 py-1 text-sm text-center" value={rating} onChange={e => { const v = e.target.value; setRating(v === "" ? "" : Math.max(0, Math.min(10, Number(v)))); }} />
             <span className={`px-3 py-1 rounded-full text-sm font-bold ${ratingColor}`}>{rating || "–"}/10</span>
-            <button type="button" onClick={toggleCertifica} className={`px-3 py-1 text-xs rounded font-medium ${certified ? "bg-amber-500 text-white" : "bg-slate-200 text-slate-700"}`}>
-              {certified ? "🏆 Certificato" : "Certifica"}
+            <button type="button" onClick={() => setProfileVerified(value => !value)} className={`px-3 py-1 text-xs rounded font-medium ${profileVerified ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-700"}`}>
+              {profileVerified ? "✓ Profilo verificato" : "Segna verificato"}
             </button>
           </div>
         </div>
@@ -280,6 +255,7 @@ export function InterviewForm({ candidate, lastInterview, previousInterviews = [
         <form action={handleSaveInterview} className="space-y-4">
           <input type="hidden" name="candidateId" value={candidate.id} />
           <input type="hidden" name="rating" value={rating === "" ? "" : String(rating)} />
+          <input type="hidden" name="profileVerified" value={String(profileVerified)} />
 
           {/* Mansioni */}
           <div>
@@ -373,7 +349,7 @@ export function InterviewForm({ candidate, lastInterview, previousInterviews = [
 
           {/* Decisione + Firma */}
           <div className="flex flex-wrap items-end gap-4 pt-2 border-t border-slate-100">
-            <div className="flex-1 min-w-[200px]">
+            <div className="min-w-0 flex-1 sm:min-w-[200px]">
               <label className="block text-[11px] font-medium text-slate-500 uppercase tracking-wide mb-2">Decisione</label>
               <div className="flex gap-2">
                 {[{ v: "ASSUME", l: "Assumere", c: "bg-green-500" }, { v: "SCARTA", l: "Scartare", c: "bg-red-500" }, { v: "LISTA_ATTESA", l: "Lista attesa", c: "bg-amber-500" }].map(d => (
@@ -391,6 +367,7 @@ export function InterviewForm({ candidate, lastInterview, previousInterviews = [
             <button type="submit" disabled={isSavingInterview} className="px-6 py-2 rounded-lg bg-teal-600 text-white font-medium hover:bg-teal-700 disabled:opacity-50">
               {isSavingInterview ? "Salvataggio..." : "Salva colloquio"}
             </button>
+            <button type="submit" name="saveMode" value="new" disabled={isSavingInterview} className="px-4 py-2 rounded-lg border border-teal-700 text-teal-800 text-sm font-medium hover:bg-teal-50 disabled:opacity-50">Salva come nuovo colloquio</button>
           </div>
         </form>
       </section>

@@ -1,63 +1,44 @@
-# Candidature-Hub - Product Requirements Document
+# Candidature Hub - Product Requirements
 
-## Overview
-Sistema di gestione candidature on-premise composto da:
-1. **mail2pdf** (Python): Legge email, estrae allegati PDF, salva su NAS
-2. **Parser** (Python): Analizza PDF, estrae info candidati con NER/OCR, scrive su PostgreSQL
-3. **App Web** (Next.js + Prisma): UI per gestire candidati, colloqui, valutazioni
+## Obiettivo
 
-## Tech Stack
-- Frontend: Next.js 16 + React 19 + Tailwind CSS
-- Backend: Python (parser, mail2pdf)
-- Database: PostgreSQL con Prisma ORM
-- Deployment: systemd services su server on-premise
+Sistema HR on-premise in Docker Compose per acquisire, archiviare, cercare e valutare candidature mantenendo database e documenti trasferibili tramite backup completi, con accesso web, PWA e futuri client iOS/Android.
 
-## Completed Features
+La UX è Tablet First: iPad e tablet Android costituiscono il formato principale, con controlli touch e layout adatti a orientamento verticale e orizzontale.
 
-### 2025-01-09
-- ✅ **Fix Logo Certificato**: Rimosso watermark dalla lista candidati, logo ora appare di fianco al cognome in trasparenza per candidati certificati
-- ✅ **Parser NER/OCR Migliorato**: 
-  - Pipeline estrazione nomi: Heuristic strutturata → Filename → Email → NER spaCy
-  - Supporto pattern "Curriculum Vitae di X Y", "Nome: X" "Cognome: Y"
-  - Integrazione OCR on/off leggibile dal DB SystemConfig
-  - Test passati su 3 PDF reali (Tommaso Sammaciccia, Gianni Piatti, Elisabetta Reale)
-- ✅ **Lint Fix**: Corretti errori ESLint (apostrofo escaped, tipo any→unknown)
+## Componenti
 
-### Precedenti sessioni
-- Lista candidati con filtri, paginazione, sorting
-- Scheda dettaglio candidato con form colloquio compatto
-- QuickActions (Scarta/Valida/Ripristina/Certifica)
-- Gestione allegati con validazione MIME/dimensione
-- Pagina Admin con config sistema (NAS paths, IMAP, retention GDPR)
-- Test connessione DB esterno
-- Indicatore "Certificato" 🏆 basato su keyword [SCEMO]
-- Audit Log per azioni critiche
+1. `mail-worker`: acquisizione IMAP configurabile e conversione email/PDF.
+2. `parser`: scansione ricorsiva degli ingressi email e manuali, estrazione PDF/OCR e importazione PostgreSQL.
+3. `app`: UI Next.js con candidati, colloqui, allegati, ruoli, configurazione, retention e backup.
+4. `db`: PostgreSQL con migrazioni Prisma automatiche.
 
-## Backlog
+## Requisiti principali
 
-### P1 - Prossimi task
-- [ ] Filtro "Da valutare" nella lista candidati
-- [ ] Navigazione rapida (←/→) tra candidati "da valutare"
-- [ ] Export CSV lista candidati
+- Login e ruoli `ADMIN`, `RECRUITER`, `VIEWER`.
+- Credenziali operative cifrate fuori dal codice.
+- Cambio email senza deploy o riavvio.
+- Storage Docker permanente con destinazioni configurabili dalla webapp.
+- Cartella manuale ricorsiva e caricamento multiplo fino a 50 PDF.
+- Quarantena dei documenti non elaborabili.
+- Candidature multiple intenzionali con indice di invio.
+- Stato candidatura esplicito e audit delle operazioni critiche.
+- Backup completo portabile: dump PostgreSQL più storage.
+- Importazione archivio da UI e ripristino transazionale a servizi fermi.
+- UI responsive installabile e API v1 con token Bearer per client mobili.
+- Nessuna cache offline predefinita di CV o dati HR sui dispositivi.
 
-### P2 - Medio termine
-- [ ] Auth/Ruoli (ADMIN, RECRUITER, VIEWER)
-- [ ] Estensione Audit Log
+## Vincoli
 
-### P3 - Bassa priorità
-- [ ] Miglioramenti UI/UX minori
+- I file devono rimanere sotto `/data` all'interno dei container.
+- Il mount fisico NFS/SMB è responsabilità del sistema operativo host.
+- I CV reali non devono essere conservati nel repository Git.
+- La deduplicazione fuzzy resta esclusa; viene impedito soltanto il retry tecnico dello stesso file.
 
-### Escluso
-- ❌ Fuzzy matching per deduplica candidati (esplicitamente rifiutato)
+## Roadmap residua
 
-## Key Files
-- `/app/candidature-hub/parser/parser.py` - Parser PDF con NER/OCR
-- `/app/candidature-hub/app/prisma/schema.prisma` - Schema database
-- `/app/candidature-hub/app/app/candidates/page.tsx` - Lista candidati
-- `/app/candidature-hub/app/app/candidates/InterviewForm.tsx` - Scheda candidato
-- `/app/candidature-hub/app/app/admin/page.tsx` - Pagina amministrazione
-
-## Notes
-- L'app è on-premise, il codice viene deployato tramite `git pull` sul server
-- Il parser legge la config OCR dal DB SystemConfig ad ogni ciclo
-- I test del parser vanno eseguiti sul server con DATABASE_URL configurato
+- Metriche e notifiche operative avanzate.
+- Test browser end-to-end della UI.
+- Wrapper Capacitor iOS/Android con Keychain/Encrypted Storage.
+- HTTPS/VPN, configurazione server mobile e revoca dispositivi.
+- Scansione documenti, notifiche push e biometria opzionale.

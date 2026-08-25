@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { readFile, unlink } from "fs/promises";
 import { existsSync } from "fs";
+import { authorizeRequest, isAuthError } from "../../../../lib/auth";
+import path from "node:path";
 
 // Log audit
 async function logAudit(action: string, entity: string, entityId?: string, details?: string) {
@@ -29,6 +31,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await authorizeRequest(req, ["ADMIN", "RECRUITER", "VIEWER"]);
+    if (isAuthError(auth)) return auth;
     const { id } = await params;
 
     const attachment = await prisma.attachment.findUnique({
@@ -38,6 +42,9 @@ export async function GET(
     if (!attachment) {
       return NextResponse.json({ error: "Allegato non trovato" }, { status: 404 });
     }
+    const config = await prisma.systemConfig.findUnique({ where: { id: "main" }, select: { attachmentsPath: true } });
+    const root = path.resolve(config?.attachmentsPath || "/data/attachments");
+    if (!path.resolve(attachment.path).startsWith(root + path.sep)) return NextResponse.json({ error: "Percorso allegato non sicuro" }, { status: 403 });
 
     if (!existsSync(attachment.path)) {
       return NextResponse.json({ error: "File non trovato su disco" }, { status: 404 });
@@ -70,6 +77,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await authorizeRequest(req, ["ADMIN", "RECRUITER"], true);
+    if (isAuthError(auth)) return auth;
     const { id } = await params;
 
     const attachment = await prisma.attachment.findUnique({
@@ -82,6 +91,9 @@ export async function DELETE(
     }
 
     // Elimina file da disco
+    const config = await prisma.systemConfig.findUnique({ where: { id: "main" }, select: { attachmentsPath: true } });
+    const root = path.resolve(config?.attachmentsPath || "/data/attachments");
+    if (!path.resolve(attachment.path).startsWith(root + path.sep)) return NextResponse.json({ error: "Percorso allegato non sicuro" }, { status: 403 });
     if (existsSync(attachment.path)) {
       await unlink(attachment.path);
     }

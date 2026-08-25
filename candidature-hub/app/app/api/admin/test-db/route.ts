@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Client } from "pg";
+import { authorizeRequest, isAuthError } from "../../../../lib/auth";
+import { prisma } from "../../../../lib/prisma";
+import { decryptSecret } from "../../../../lib/secret-box";
 
 /**
  * POST /api/admin/test-db
@@ -8,11 +11,15 @@ import { Client } from "pg";
  * Body: { host, port, dbname, user, password, ssl }
  */
 export async function POST(req: NextRequest) {
+  const auth = await authorizeRequest(req, ["ADMIN"], true);
+  if (isAuthError(auth)) return auth;
   let client: Client | null = null;
   
   try {
     const body = await req.json();
     const { host, port, dbname, user, password, ssl } = body;
+    const saved = password ? "" : (await prisma.systemConfig.findUnique({ where: { id: "main" }, select: { extDbPass: true } }))?.extDbPass || "";
+    const effectivePassword = password || decryptSecret(saved);
 
     if (!host || !dbname || !user) {
       return NextResponse.json({ 
@@ -27,7 +34,7 @@ export async function POST(req: NextRequest) {
       port: port || 5432,
       database: dbname,
       user: user,
-      password: password || "",
+      password: effectivePassword,
       ssl: ssl ? { rejectUnauthorized: false } : false,
       connectionTimeoutMillis: 10000,
     });

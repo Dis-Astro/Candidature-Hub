@@ -7,6 +7,7 @@ import { prisma } from "../../lib/prisma";
 import { buildUrl, parsePositiveInt } from "../../lib/url";
 import { FilterForm } from "./FilterForm";
 import { PageSizeSelector } from "./PageSizeSelector";
+import { requireUser } from "../../lib/auth";
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -67,6 +68,7 @@ function ratingPillClass(r: number): string {
 }
 
 export default async function CandidatesPage({ searchParams }: PageProps) {
+  await requireUser();
   const search = await searchParams;
 
   const sp = new URLSearchParams();
@@ -151,7 +153,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
     idsFromCv = rows.map((r) => r.candidateId);
   }
 
-  // Testo “classico” su campi candidato
+  // Testo "classico" su campi candidato
   const orText: Prisma.CandidateWhereInput[] =
     q && q.length > 0
       ? [
@@ -194,33 +196,26 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
       updatedAt: true,
       interviewed: true,
       discarded: true,
+      status: true,
       notes: true,
       _count: { select: { importEvents: true } },
       interviews: {
         orderBy: { date: "desc" },
         take: 1,
-        select: { notes: true, hrNotes: true, decision: true },
+        select: { notes: true, hrNotes: true, decision: true, profileVerified: true },
       },
     },
   });
 
-  // Helper: check se candidato è "certificato" (keyword [SCEMO] in qualsiasi nota)
+  // Profilo verificato esplicitamente dal recruiter.
   function isCertified(candidate: typeof items[0]): boolean {
-    const interviewNotes = candidate.interviews[0]?.notes || "";
-    const hrNotes = candidate.interviews[0]?.hrNotes || "";
-    const candidateNotes = candidate.notes || "";
-    const allNotes = `${interviewNotes} ${hrNotes} ${candidateNotes}`;
-    return /\[SCEMO\]/i.test(allNotes);
+    return candidate.interviews[0]?.profileVerified ?? false;
   }
 
   // Helper: determina stato candidato per badge
   type CandidateState = "SCARTATO" | "DA_VALUTARE" | "SHORTLIST" | "ASSUMERE";
   function getCandidateState(c: typeof items[0]): CandidateState {
-    if (c.discarded) return "SCARTATO";
-    const decision = c.interviews[0]?.decision;
-    if (decision === "ASSUME") return "ASSUMERE";
-    if (c.rating !== null && c.rating >= 5) return "SHORTLIST";
-    return "DA_VALUTARE";
+    return c.status;
   }
 
   const STATE_BADGE: Record<CandidateState, { label: string; class: string }> = {
@@ -267,12 +262,12 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
           <h1 className="text-2xl font-bold text-slate-800">Candidati</h1>
           <p className="text-sm text-slate-500 mt-0.5">{rangeText}</p>
         </div>
-        <Link
+        <div className="flex gap-2"><Link href="/api/candidates/export" prefetch={false} className="inline-flex items-center px-4 py-2.5 rounded-xl border bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50">Esporta CSV</Link><Link
           href="/candidates/new"
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow-sm hover:shadow transition-all"
         >
           <span className="text-lg">+</span> Nuovo candidato
-        </Link>
+        </Link></div>
       </div>
 
       <FilterForm />
@@ -282,7 +277,36 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
         <span>Pagina {page} di {totalPages}</span>
       </div>
 
-      <div className="overflow-x-auto bg-white border border-slate-200 rounded-xl shadow-sm">
+      <div className="grid gap-3 md:hidden">
+        {items.map((candidate) => {
+          const certified = isCertified(candidate);
+          const state = getCandidateState(candidate);
+          const stateBadge = STATE_BADGE[state];
+          return (
+            <Link key={candidate.id} href={`/candidates/${candidate.displayId}`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm active:bg-slate-50">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-400">#{candidate.displayId}</span>
+                    {certified && <span title="Profilo verificato">🏆</span>}
+                    {candidate.interviewed && <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">Colloquio</span>}
+                  </div>
+                  <h2 className="mt-1 truncate text-base font-bold text-slate-900">{candidate.lastName} {candidate.firstName}</h2>
+                  <p className="mt-1 line-clamp-2 text-sm text-slate-600">{formatMansione(candidate.mansione) || "Mansione non indicata"}</p>
+                </div>
+                {typeof candidate.rating === "number" && <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${ratingPillClass(candidate.rating)}`}>{candidate.rating}</span>}
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs ${stateBadge.class}`}>{stateBadge.label}</span>
+                <span className="text-xs text-slate-400">Agg. {new Date(candidate.updatedAt).toLocaleDateString("it-IT")}</span>
+              </div>
+            </Link>
+          );
+        })}
+        {items.length === 0 && <div className="rounded-xl border bg-white p-8 text-center text-slate-400">Nessun risultato trovato</div>}
+      </div>
+
+      <div className="hidden overflow-x-auto bg-white border border-slate-200 rounded-xl shadow-sm md:block">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
@@ -390,7 +414,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
         </table>
       </div>
 
-      <div className="flex items-center justify-between pt-2">
+      <div className="flex flex-col items-stretch justify-between gap-3 pt-2 sm:flex-row sm:items-center">
         <div className="flex items-center gap-2">
           <Link
             className={`px-4 py-2 rounded-md border text-sm font-medium ${
@@ -421,7 +445,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
           </Link>
         </div>
 
-        <div className="text-sm text-gray-600">
+        <div className="text-center text-sm text-gray-600 sm:text-right">
           Pagina {page} di {totalPages}
         </div>
       </div>

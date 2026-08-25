@@ -1,55 +1,31 @@
-# Parser CV - Candidature Hub
+# Parser CV
 
-Estrae automaticamente dati dai CV PDF e li inserisce nel database.
+Worker Docker che estrae dati dai PDF e li inserisce in PostgreSQL.
 
-## Requisiti sistema
+## Ingressi
 
-```bash
-# Tesseract OCR (opzionale, per PDF scansionati)
-apt-get install tesseract-ocr tesseract-ocr-ita poppler-utils
+I percorsi sono letti da `SystemConfig` a ogni ciclo:
 
-# Python dependencies
-pip install -r requirements.txt
+- `mailInboxPath`: PDF ottenuti dal worker IMAP;
+- `manualInboxPath`: PDF copiati, scansionati o caricati manualmente;
+- entrambe le directory vengono percorse ricorsivamente;
+- `processedPath`: archivio dei documenti elaborati;
+- `errorPath`: quarantena per file non validi o non elaborabili.
 
-# Modello spaCy italiano (per NER nome/cognome)
-python -m spacy download it_core_news_sm
-```
+Il limite è 50 MB per PDF. Un `sourceKey` rende idempotente il riavvio dopo un'importazione già registrata.
 
-## Configurazione
+## Estrazione
 
-Variabili ambiente:
+1. testo con pypdf;
+2. fallback pdfminer;
+3. OCR Tesseract italiano, se abilitato e il PDF non contiene testo;
+4. nome/cognome da pattern strutturati;
+5. filename;
+6. email;
+7. spaCy NER come ultima risorsa.
 
-| Variabile | Default | Descrizione |
-|-----------|---------|-------------|
-| `WATCH_DIR` | `/mnt/nas_curriculum/mail2pdf` | Cartella da monitorare |
-| `PROCESSED_DIR` | `$WATCH_DIR/processed` | Dove spostare i PDF elaborati |
-| `DATABASE_URL` | - | Connection string PostgreSQL |
-| `OCR_ENABLED` | `0` | Abilita OCR per PDF scansionati (`1` per abilitare) |
-| `OCR_LANG` | `ita` | Lingua tesseract |
-| `ONCE` | `0` | Esegui una sola volta (`1` per abilitare) |
+Ogni invio valido crea una candidatura distinta e incrementa `submissionIndex` per lo stesso nome e cognome.
 
-## Estrazione nomi
+## Test
 
-Il parser usa più strategie in ordine di priorità:
-
-1. **NER spaCy** - Riconoscimento entità italiane (più accurato)
-2. **Heuristic testo** - Pattern Nome Cognome nelle prime righe
-3. **Filename** - Estrazione da nome file (es. `CV Mario Rossi.pdf`)
-4. **Email** - Fallback da indirizzo email
-
-## Esecuzione
-
-```bash
-# Singola esecuzione
-ONCE=1 python parser.py
-
-# Daemon (loop ogni 30s)
-python parser.py
-
-# Con OCR abilitato
-OCR_ENABLED=1 python parser.py
-```
-
-## systemd
-
-Vedi `../systemd/parser.service` e `parser.timer` per esecuzione schedulata.
+`python -m unittest discover -s tests -v`

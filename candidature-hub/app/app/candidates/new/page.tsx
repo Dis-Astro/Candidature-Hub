@@ -57,7 +57,7 @@ export default function NewCandidatePage() {
   }
 
   return (
-    <div className="max-w-lg mx-auto p-6">
+    <div className="mx-auto max-w-lg p-0 sm:p-6">
       <h1 className="text-xl font-bold text-slate-800 mb-6">Nuovo candidato</h1>
 
       {error && (
@@ -67,7 +67,7 @@ export default function NewCandidatePage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-[11px] font-medium text-slate-500 uppercase tracking-wide mb-1">
               Nome <span className="text-red-500">*</span>

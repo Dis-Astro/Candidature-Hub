@@ -1,94 +1,52 @@
-# ---- secrets ----
+# Secrets
 .env
 .env.*
 !.env.example
+**/.env
+**/.env.*
+!**/.env.example
 *.pem
 *.key
 id_rsa*
 secrets.*
 
-# ---- node / next ----
-node_modules/
-.next/
+# JavaScript / Next.js
+**/node_modules/
+**/.next/
 out/
 dist/
 build/
 coverage/
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-.DS_Store
+*-debug.log*
 
-# ---- prisma ----
-prisma/dev.db
-prisma/*.db
-prisma/*.db-journal
-
-# ---- python ----
-__pycache__/
+# Python
+**/__pycache__/
 *.pyc
-.venv/
-venv/
-.envrc
+**/.venv/
+**/venv/
 .mypy_cache/
 .pytest_cache/
 
-# ---- system / editor ----
-*.swp
-*.swo
-.idea/
-.vscode/
-
-# ---- exports / backups (DO NOT COMMIT) ----
+# Local databases, storage, exports and backups
+prisma/dev.db
+prisma/*.db*
+data/
+data-test/
 candidature-hub/export/
 candidature-hub-backups/
 *.tgz
 *.tar.gz
 
-# ---- editor / backups ----
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
 *.bak
-*.bak.*
 *.save
 
-# ---- accidental junk ----
-app@*
-next
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
-
-# ---- emergent / local machine ----
+# Local tooling
 .emergent/
 .gitconfig
-!**/.env.example
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*

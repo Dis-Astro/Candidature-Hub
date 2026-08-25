@@ -3,3 +3,37 @@
 /* opzionale: piccoli reset */
 :root { color-scheme: light; }
 html, body { height: 100%; }
+
+html { -webkit-text-size-adjust: 100%; }
+body { overscroll-behavior-y: none; }
+button, a, input, select, textarea { touch-action: manipulation; }
+button, select, input:not([type="checkbox"]):not([type="radio"]) { min-height: 2.75rem; }
+input[type="checkbox"], input[type="radio"] { min-height: 1.25rem; min-width: 1.25rem; }
+:focus-visible { outline: 3px solid rgb(20 184 166 / 0.45); outline-offset: 2px; }
+
+.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: max(0.35rem, env(safe-area-inset-bottom)); }
+.mobile-nav-item {
+  display: flex;
+  min-height: 3.25rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  border-radius: 0.65rem;
+  color: rgb(71 85 105);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.mobile-nav-item span:first-child { font-size: 1.15rem; line-height: 1; }
+.mobile-nav-item:active { background: rgb(241 245 249); }
+
+@media (max-width: 639px) {
+  input, select, textarea { font-size: 16px; }
+}
+
+/* Tablet first: contenuti ariosi e controlli comodi tra 768 e 1180 px. */
+@media (min-width: 768px) and (max-width: 1180px) {
+  button, select, input:not([type="checkbox"]):not([type="radio"]) { min-height: 3rem; }
+  main { --tablet-gap: 1.25rem; }
+}

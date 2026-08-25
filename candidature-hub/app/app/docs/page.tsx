@@ -1,16 +1,14 @@
-import { readFile } from 'node:fs/promises'
+import { requireUser } from '@/lib/auth'
 export const dynamic = 'force-dynamic'
 export default async function DocsPage() {
-  let md = ''
-  try {
-    md = await readFile('/opt/candidature-hub/docs/DEPLOY.md', 'utf8')
-  } catch {
-    md = '# Documentazione\n\nFile DEPLOY.md non trovato in /opt/candidature-hub/docs/.'
-  }
-  return (
-    <main className="mx-auto max-w-5xl px-4 py-6">
-      <h1 className="text-2xl font-semibold mb-4">Documentazione</h1>
-      <pre className="whitespace-pre-wrap text-sm border rounded p-4 bg-gray-50">{md}</pre>
-    </main>
-  )
+  await requireUser();
+  return <div className="space-y-6">
+    <div><p className="text-sm font-semibold text-teal-700">Guida rapida</p><h1 className="mt-1 text-3xl font-bold">Pensata prima di tutto per tablet</h1><p className="mt-2 max-w-3xl text-slate-600">Candidature Hub è progettata per l’uso quotidiano su iPad e tablet Android, sia in orizzontale sia in verticale. Computer e smartphone restano pienamente supportati.</p></div>
+    <section className="grid gap-4 md:grid-cols-3">
+      {[['1', 'Ricezione', 'I CV arrivano dalla casella email configurata oppure vengono caricati manualmente dal tablet.'], ['2', 'Controllo', 'Antivirus e parser verificano il file, leggono il testo e preparano la candidatura.'], ['3', 'Valutazione', 'Il recruiter apre il candidato, aggiunge note, colloqui, allegati e decisione finale.']].map(([n, title, text]) => <article key={n} className="rounded-xl border bg-white p-5 shadow-sm"><div className="grid h-10 w-10 place-items-center rounded-full bg-teal-100 font-bold text-teal-800">{n}</div><h2 className="mt-4 text-lg font-bold">{title}</h2><p className="mt-2 text-sm leading-6 text-slate-600">{text}</p></article>)}
+    </section>
+    <section className="rounded-xl border bg-white p-5 shadow-sm"><h2 className="text-xl font-bold">Uso su iPad e tablet Android</h2><ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-6 text-slate-700"><li>Apri l’indirizzo dell’app con Safari su iPad oppure Chrome su Android.</li><li>Accedi con l’email e la password create dall’amministratore.</li><li>Aggiungi la webapp alla schermata Home per usarla a tutto schermo.</li><li>Usa <strong>Importazioni</strong> per controllare email, caricamenti, errori e antivirus.</li><li>Durante un colloquio usa preferibilmente il tablet in orizzontale; i comandi hanno dimensioni adatte al tocco.</li></ol></section>
+    <section className="grid gap-4 md:grid-cols-2"><article className="rounded-xl border bg-white p-5"><h2 className="text-lg font-bold">Curriculum ricevuti via email</h2><p className="mt-2 text-sm leading-6 text-slate-600">L’amministratore configura IMAP in Gestione Sistema e verifica il collegamento. I nuovi PDF vengono controllati dall’antivirus, analizzati e mostrati nella pagina Importazioni.</p></article><article className="rounded-xl border bg-white p-5"><h2 className="text-lg font-bold">Curriculum cartacei o ricevuti altrove</h2><p className="mt-2 text-sm leading-6 text-slate-600">Scansiona il documento in PDF, quindi usa “Carica CV manualmente”. Puoi selezionare fino a 50 documenti insieme; il parser legge anche le scansioni tramite OCR.</p></article></section>
+    <section className="rounded-xl border border-amber-200 bg-amber-50 p-5"><h2 className="text-lg font-bold text-amber-900">Sicurezza e backup</h2><p className="mt-2 text-sm leading-6 text-amber-900">Ogni file caricato viene controllato da ClamAV. I file sospetti non entrano nell’archivio candidati. I backup completi contengono database e documenti e vanno scaricati periodicamente su un supporto separato.</p></section>
+  </div>
 }
