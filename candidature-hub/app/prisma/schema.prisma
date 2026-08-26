@@ -269,10 +269,12 @@ model CandidateTag {
 model User {
   id           String   @id @default(cuid())
   createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
   email        String   @unique
   passwordHash String
   name         String?
   role         Role     @default(RECRUITER)
+  isActive     Boolean  @default(true)
 
   auditLogs AuditLog[]
   sessions  Session[]

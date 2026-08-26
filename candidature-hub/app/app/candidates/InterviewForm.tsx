@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 import type { Candidate, Interview, CvFile } from "@prisma/client";
 import { saveInterviewAction, updateCandidateAction } from "./detail/actions";
 import { AttachmentsSection } from "./AttachmentsSection";
@@ -25,6 +27,7 @@ const MANSIONE_OPTIONS = [
 const PATENTE_OPTIONS = ["A", "B", "C", "D", "E", "CQC"];
 
 export function InterviewForm({ candidate, lastInterview }: Props) {
+  const router = useRouter();
   const [firstName, setFirstName] = useState(candidate.firstName);
   const [lastName, setLastName] = useState(candidate.lastName);
   const [email, setEmail] = useState(candidate.email ?? "");
@@ -110,7 +113,8 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
         body: JSON.stringify({ targetId: mergeTargetId.trim(), sourceIds: [candidate.id] }),
       });
       if (!res.ok) { alert("Errore: " + await res.text()); return; }
-      window.location.href = "/candidates";
+      router.push("/candidates");
+      router.refresh();
     } finally { setIsMerging(false); }
   }
 
@@ -120,12 +124,19 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
     try {
       const res = await fetch(`/api/candidates/${candidate.id}`, { method: "DELETE" });
       if (!res.ok) { alert("Errore: " + await res.text()); return; }
-      window.location.href = "/candidates";
+      router.push("/candidates");
+      router.refresh();
     } finally { setIsDeleting(false); }
   }
 
   return (
     <div className="space-y-4 relative">
+      {/* Timbro personalizzato mostrato quando il profilo è certificato. */}
+      {profileVerified && (
+        <div className="pointer-events-none fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2" aria-hidden="true">
+          <Image src="/logo.png" alt="" width={256} height={256} className="h-64 w-64 -rotate-[15deg] object-contain opacity-15" priority />
+        </div>
+      )}
       {/* === HEADER COMPATTO: Anagrafica + Meta === */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Anagrafica - 2/3 */}
@@ -136,10 +147,11 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
               {lastName && (
                 <span className="text-lg font-bold text-slate-700 flex items-center gap-2">
                   {lastName}
-                  {profileVerified && <span className="text-emerald-600" title="Profilo verificato">✓</span>}
+                  {profileVerified && <span className="text-amber-500" title="Profilo certificato">🏆</span>}
                 </span>
               )}
             </div>
+            {profileVerified && <Image src="/logo.png" alt="Profilo certificato" width={48} height={48} className="h-12 w-12 object-contain" />}
           </div>
           
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -246,8 +258,8 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
           <div className="flex items-center gap-2">
             <input type="number" min={0} max={10} className="w-14 rounded border px-2 py-1 text-sm text-center" value={rating} onChange={e => { const v = e.target.value; setRating(v === "" ? "" : Math.max(0, Math.min(10, Number(v)))); }} />
             <span className={`px-3 py-1 rounded-full text-sm font-bold ${ratingColor}`}>{rating || "–"}/10</span>
-            <button type="button" onClick={() => setProfileVerified(value => !value)} className={`px-3 py-1 text-xs rounded font-medium ${profileVerified ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-700"}`}>
-              {profileVerified ? "✓ Profilo verificato" : "Segna verificato"}
+            <button type="button" onClick={() => setProfileVerified(value => !value)} className={`min-h-11 rounded-lg px-4 text-sm font-semibold ${profileVerified ? "bg-amber-500 text-white" : "bg-slate-200 text-slate-700"}`} title="Applica il timbro di certificazione alla candidatura">
+              {profileVerified ? "🏆 Certificato" : "Certifica"}
             </button>
           </div>
         </div>

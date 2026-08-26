@@ -1,10 +1,8 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -24,7 +22,10 @@ export default function LoginPage() {
       setError(body.error || "Accesso non riuscito");
       return;
     }
-    router.replace("/"); router.refresh();
+    // A full navigation makes the new HttpOnly session cookie visible to all
+    // server components immediately. A client-side transition can otherwise
+    // reuse the unauthenticated layout and leave the login page on screen.
+    window.location.replace("/");
   }
 
   return <main className="grid min-h-[75vh] place-items-center">

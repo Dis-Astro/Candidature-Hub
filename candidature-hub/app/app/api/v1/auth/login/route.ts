@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
   const user = email ? await prisma.user.findUnique({ where: { email } }) : null;
-  if (!user || !verifyPassword(password, user.passwordHash)) {
+  if (!user || !user.isActive || !verifyPassword(password, user.passwordHash)) {
     const state = attempts.get(key) || { count: 0, resetAt: now + 15 * 60_000 };
     state.count += 1;
     attempts.set(key, state);

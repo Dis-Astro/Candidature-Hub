@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 
 type Config = {
   storageMode: string;
@@ -115,7 +116,6 @@ export default function AdminPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [backups, setBackups] = useState<Array<{ name: string; size: number }>>([]);
   const [backupBusy, setBackupBusy] = useState(false);
-  const [users, setUsers] = useState<Array<{ id: string; email: string; name: string | null; role: string }>>([]);
 
   useEffect(() => {
     fetch("/api/admin/config")
@@ -143,15 +143,6 @@ export default function AdminPage() {
   }
 
   useEffect(() => { void loadBackups(); }, []);
-  async function loadUsers() { const response = await fetch("/api/admin/users"); if (response.ok) setUsers((await response.json()).users || []); }
-  useEffect(() => { void loadUsers(); }, []);
-
-  async function saveUser(form: FormData) {
-    const response = await fetch("/api/admin/users", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(form)) });
-    const body = await response.json().catch(() => ({}));
-    setMessage(response.ok ? { type: "ok", text: "Utente salvato" } : { type: "err", text: body.error || "Errore utente" });
-    if (response.ok) await loadUsers();
-  }
 
   async function createBackup() {
     setBackupBusy(true);
@@ -803,15 +794,9 @@ export default function AdminPage() {
       </section>
 
       <section className="border rounded-lg p-4 space-y-3">
-        <div className="border-b pb-4 space-y-3">
-          <h2 className="font-semibold text-lg">Utenti e ruoli</h2>
-          <form action={saveUser} className="grid gap-2 md:grid-cols-4">
-            <input name="name" placeholder="Nome" className="rounded border px-3 py-2 text-sm" />
-            <input name="email" type="email" required placeholder="email@azienda.it" className="rounded border px-3 py-2 text-sm" />
-            <input name="password" type="password" minLength={12} required placeholder="Password (min. 12)" className="rounded border px-3 py-2 text-sm" />
-            <div className="flex gap-2"><select name="role" className="flex-1 rounded border px-2 text-sm"><option>VIEWER</option><option>RECRUITER</option><option>ADMIN</option></select><button className="rounded bg-slate-800 px-3 text-sm text-white">Salva</button></div>
-          </form>
-          <div className="divide-y rounded border">{users.map(user => <div key={user.id} className="flex justify-between p-2 text-sm"><span>{user.name || user.email} · {user.role}</span><button type="button" className="text-red-700" onClick={async () => { if (confirm(`Eliminare ${user.email}?`)) { await fetch(`/api/admin/users?id=${encodeURIComponent(user.id)}`, { method: "DELETE" }); await loadUsers(); } }}>Elimina</button></div>)}</div>
+        <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div><h2 className="font-semibold text-lg">Utenti e ruoli</h2><p className="text-xs text-slate-500">Crea accessi, modifica ruoli, reimposta password e disattiva utenti.</p></div>
+          <Link href="/admin/users" className="inline-flex min-h-11 items-center justify-center rounded-lg bg-slate-800 px-4 text-sm font-semibold text-white hover:bg-slate-900">Gestisci utenti</Link>
         </div>
         <div className="flex items-center justify-between"><div><h2 className="font-semibold text-lg">Backup e migrazione</h2><p className="text-xs text-slate-500">Ogni archivio contiene database PostgreSQL e tutto lo storage. Il ripristino si applica a servizi fermi.</p></div><button type="button" onClick={createBackup} disabled={backupBusy} className="rounded bg-indigo-600 px-4 py-2 text-sm text-white disabled:opacity-50">Crea backup</button></div>
         <div className="grid gap-3 sm:grid-cols-2">

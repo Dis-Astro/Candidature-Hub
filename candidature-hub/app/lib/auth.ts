@@ -21,9 +21,9 @@ function bearerToken(req: NextRequest): string | null {
 async function userFromToken(token: string) {
   const session = await prisma.session.findUnique({
     where: { tokenHash: tokenHash(token) },
-    include: { user: { select: { id: true, email: true, name: true, role: true } } },
+    include: { user: { select: { id: true, email: true, name: true, role: true, isActive: true } } },
   });
-  if (!session || session.expiresAt <= new Date()) {
+  if (!session || session.expiresAt <= new Date() || !session.user.isActive) {
     if (session) await prisma.session.delete({ where: { id: session.id } }).catch(() => undefined);
     return null;
   }
