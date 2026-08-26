@@ -103,11 +103,11 @@ export function QuickActions({ candidateId, discarded, rating, decision }: Props
       </div>
 
       {/* Pulsanti compatti */}
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         <button
           onClick={() => handleAction("discard")}
           disabled={acting || currentStatus === "SCARTATO"}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+          className={`min-h-12 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
             currentStatus === "SCARTATO"
               ? "bg-red-200 text-red-400 cursor-not-allowed"
               : "bg-red-500 text-white hover:bg-red-600 active:scale-95"
@@ -119,7 +119,7 @@ export function QuickActions({ candidateId, discarded, rating, decision }: Props
         <button
           onClick={() => handleAction("restore")}
           disabled={acting || currentStatus === "DA_VALUTARE"}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+          className={`min-h-12 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
             currentStatus === "DA_VALUTARE"
               ? "bg-slate-200 text-slate-400 cursor-not-allowed"
               : "bg-slate-500 text-white hover:bg-slate-600 active:scale-95"
@@ -131,7 +131,7 @@ export function QuickActions({ candidateId, discarded, rating, decision }: Props
         <button
           onClick={() => handleAction("shortlist")}
           disabled={acting || currentStatus === "SHORTLIST"}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+          className={`min-h-12 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
             currentStatus === "SHORTLIST"
               ? "bg-green-200 text-green-400 cursor-not-allowed"
               : "bg-green-500 text-white hover:bg-green-600 active:scale-95"
@@ -143,7 +143,7 @@ export function QuickActions({ candidateId, discarded, rating, decision }: Props
         <button
           onClick={() => handleAction("hire")}
           disabled={acting || currentStatus === "ASSUMERE"}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+          className={`min-h-12 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
             currentStatus === "ASSUMERE"
               ? "bg-amber-200 text-amber-400 cursor-not-allowed"
               : "bg-amber-500 text-white hover:bg-amber-600 active:scale-95"

@@ -19,6 +19,10 @@ Le app mobili non girano in Docker: Docker ospita il servizio centrale. I pacche
 
 ## Base mobile già disponibile
 
+- Shell iPad First con rail laterale da 768 px e navigazione inferiore su smartphone.
+- Layout verificato a 768×1024 e 1024×768, senza scorrimento orizzontale.
+- Schede candidato a due colonne su tablet; la tabella completa compare solo su desktop ampi.
+- PWA standalone con safe area iOS, orientamento libero e scorciatoie applicative.
 - `GET /api/v1/capabilities`: versione e funzionalità supportate.
 - `POST /api/v1/auth/login`: restituisce token Bearer e scadenza.
 - `GET /api/v1/me`: verifica token e utente.
@@ -41,10 +45,22 @@ Per l'uso fuori dalla LAN sono necessari:
 
 L'app deve mostrare uno stato chiaro quando il server non è raggiungibile. I CV e gli allegati non vengono memorizzati offline per impostazione predefinita.
 
+## Progetto iOS
+
+Il contenitore Capacitor è disponibile in `candidature-hub/app/ios` e usa il bundle identifier `it.candidaturehub.app`. La configurazione condivisa è in `capacitor.config.ts`.
+
+- In sviluppo, il simulatore usa `http://192.168.0.37:3031`.
+- Per cambiare server: `CAPACITOR_SERVER_URL=https://SERVER pnpm ios:sync`.
+- Per aggiornare il progetto nativo: `pnpm ios:sync`.
+- Per aprirlo in Xcode: `pnpm ios:open`.
+- Sono abilitate tutte le rotazioni iPad e le safe area vengono gestite dalla UI.
+
+L'uso HTTP in chiaro è limitato allo sviluppo locale. Per dispositivi reali e distribuzione si deve configurare un endpoint HTTPS attendibile.
+
 ## Fasi successive
 
 1. Definire distribuzione: App Store/Play Store, MDM aziendale o installazione privata.
-2. Creare workspace Capacitor condiviso e schermata iniziale di configurazione server.
+2. Aggiungere una schermata nativa di configurazione server al workspace Capacitor già disponibile.
 3. Aggiungere storage sicuro del token, biometria opzionale e deep link.
 4. Integrare fotocamera/scanner PDF e condivisione file nativa.
 5. Aggiungere notifiche push per nuovi CV, errori parser e candidature da valutare.

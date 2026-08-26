@@ -10,11 +10,11 @@ export default async function UsersPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-teal-700">Amministrazione</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight">Gestione utenti</h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-600">Crea gli accessi, assegna i permessi e revoca immediatamente le sessioni quando una persona non deve più entrare.</p>
+          <p className="eyebrow">Amministrazione</p>
+          <h1 className="page-title mt-2">Gestione utenti</h1>
+          <p className="page-subtitle max-w-2xl">Crea gli accessi, assegna i permessi e revoca immediatamente le sessioni quando una persona non deve più entrare.</p>
         </div>
-        <Link href="/admin" className="inline-flex min-h-11 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Torna alle impostazioni</Link>
+        <Link href="/admin" className="secondary-action inline-flex min-h-11 items-center rounded-lg px-4 text-sm font-semibold">Torna alle impostazioni</Link>
       </div>
       <UserManagement />
     </div>

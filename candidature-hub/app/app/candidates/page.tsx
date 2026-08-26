@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import Link from "next/link";
-import { Prisma } from "@prisma/client";
+import { CandidateStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { buildUrl, parsePositiveInt } from "../../lib/url";
 import { FilterForm } from "./FilterForm";
@@ -106,6 +106,11 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
     .filter((s) => s.length > 0);
 
   const whereBase: Prisma.CandidateWhereInput = {};
+
+  const statusRaw = sp.get("status");
+  if (statusRaw && Object.values(CandidateStatus).includes(statusRaw as CandidateStatus)) {
+    whereBase.status = statusRaw as CandidateStatus;
+  }
 
   if (mansione) {
     whereBase.mansione = { contains: mansione, mode: "insensitive" };
@@ -255,16 +260,17 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
   }
 
   return (
-    <div className="space-y-4 relative">
+    <div className="relative space-y-5">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Candidati</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{rangeText}</p>
+          <p className="eyebrow">Archivio</p>
+          <h1 className="page-title mt-2">Candidati</h1>
+          <p className="page-subtitle">{rangeText} · trova, confronta e valuta i profili.</p>
         </div>
-        <div className="flex gap-2"><Link href="/api/candidates/export" prefetch={false} className="inline-flex items-center px-4 py-2.5 rounded-xl border bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50">Esporta CSV</Link><Link
+        <div className="flex gap-2"><Link href="/api/candidates/export" prefetch={false} className="touch-button border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50">Esporta CSV</Link><Link
           href="/candidates/new"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow-sm hover:shadow transition-all"
+          className="touch-button bg-teal-700 text-white shadow-sm transition hover:bg-teal-800"
         >
           <span className="text-lg">+</span> Nuovo candidato
         </Link></div>
@@ -277,13 +283,13 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
         <span>Pagina {page} di {totalPages}</span>
       </div>
 
-      <div className="grid gap-3 md:hidden">
+      <div className="grid gap-3 md:grid-cols-2 xl:hidden">
         {items.map((candidate) => {
           const certified = isCertified(candidate);
           const state = getCandidateState(candidate);
           const stateBadge = STATE_BADGE[state];
           return (
-            <Link key={candidate.id} href={`/candidates/${candidate.displayId}`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm active:bg-slate-50">
+            <Link key={candidate.id} href={`/candidates/${candidate.displayId}`} className="surface-card group flex min-h-44 flex-col justify-between p-4 transition active:scale-[.99] active:bg-slate-50 md:p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -291,12 +297,12 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
                     {certified && <span title="Profilo verificato">🏆</span>}
                     {candidate.interviewed && <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">Colloquio</span>}
                   </div>
-                  <h2 className="mt-1 truncate text-base font-bold text-slate-900">{candidate.lastName} {candidate.firstName}</h2>
+                  <h2 className="mt-2 truncate text-lg font-bold tracking-tight text-slate-900 group-hover:text-teal-800">{candidate.lastName} {candidate.firstName}</h2>
                   <p className="mt-1 line-clamp-2 text-sm text-slate-600">{formatMansione(candidate.mansione) || "Mansione non indicata"}</p>
                 </div>
                 {typeof candidate.rating === "number" && <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${ratingPillClass(candidate.rating)}`}>{candidate.rating}</span>}
               </div>
-              <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+              <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
                 <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs ${stateBadge.class}`}>{stateBadge.label}</span>
                 <span className="text-xs text-slate-400">Agg. {new Date(candidate.updatedAt).toLocaleDateString("it-IT")}</span>
               </div>
@@ -306,7 +312,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
         {items.length === 0 && <div className="rounded-xl border bg-white p-8 text-center text-slate-400">Nessun risultato trovato</div>}
       </div>
 
-      <div className="hidden overflow-x-auto bg-white border border-slate-200 rounded-xl shadow-sm md:block">
+      <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm xl:block">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
@@ -417,7 +423,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
       <div className="flex flex-col items-stretch justify-between gap-3 pt-2 sm:flex-row sm:items-center">
         <div className="flex items-center gap-2">
           <Link
-            className={`px-4 py-2 rounded-md border text-sm font-medium ${
+            className={`touch-button border text-sm ${
               page <= 1
                 ? "pointer-events-none opacity-50 bg-gray-100 text-gray-400"
                 : "bg-white hover:bg-gray-50 text-gray-700"
@@ -431,7 +437,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
           </Link>
 
           <Link
-            className={`px-4 py-2 rounded-md border text-sm font-medium ${
+            className={`touch-button border text-sm ${
               page >= totalPages
                 ? "pointer-events-none opacity-50 bg-gray-100 text-gray-400"
                 : "bg-white hover:bg-gray-50 text-gray-700"

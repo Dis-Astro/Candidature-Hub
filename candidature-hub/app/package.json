@@ -8,9 +8,15 @@
     "build": "next build",
     "start": "next start -p 3031",
     "lint": "eslint",
-    "admin:create": "node scripts/create-admin.mjs"
+    "admin:create": "node scripts/create-admin.mjs",
+    "ios:add": "cap add ios",
+    "ios:sync": "cap sync ios",
+    "ios:open": "cap open ios",
+    "ios:run": "cap run ios"
   },
   "dependencies": {
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0",
     "@prisma/client": "^6.19.3",
     "imapflow": "^1.7.5",
     "next": "16.3.2",
@@ -20,6 +26,7 @@
     "react-dom": "19.0.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.1",

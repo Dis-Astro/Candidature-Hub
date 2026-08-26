@@ -233,11 +233,12 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-0 sm:p-2">
-      <h1 className="text-2xl font-bold">Gestione Sistema</h1>
-      <p className="text-sm text-gray-600">
-        Scegli le cartelle di lavoro, configura la casella email, il parser e i backup. Solo ADMIN.
-      </p>
+    <div className="admin-page mx-auto max-w-7xl space-y-6 p-0 sm:p-2">
+      <header>
+        <p className="eyebrow">Amministrazione</p>
+        <h1 className="page-title mt-2">Gestione sistema</h1>
+        <p className="page-subtitle">Configura archivio, casella email, parser, backup e accessi amministrativi.</p>
+      </header>
 
       {message && (
         <div

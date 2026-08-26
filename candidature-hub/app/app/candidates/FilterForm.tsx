@@ -14,6 +14,7 @@ export function FilterForm() {
   const [ratingMax, setRatingMax] = useState(searchParams.get("rating_max") ?? "");
   const [interviewed, setInterviewed] = useState(searchParams.get("interviewed") ?? "");
   const [tags, setTags] = useState(searchParams.get("tags") ?? "");
+  const [status, setStatus] = useState(searchParams.get("status") ?? "");
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -24,6 +25,7 @@ export function FilterForm() {
       rating_max: ratingMax || undefined,
       interviewed: interviewed || undefined,
       tags: tags || undefined,
+      status: status || undefined,
       page: "1", // Reset alla prima pagina quando si filtrano
     };
     // Mantieni sort e pageSize se presenti
@@ -42,29 +44,34 @@ export function FilterForm() {
     setRatingMax("");
     setInterviewed("");
     setTags("");
+    setStatus("");
     router.push("/candidates");
   }
 
-  const hasFilters = q || mansione || ratingMin || ratingMax || interviewed || tags;
+  const hasFilters = q || mansione || ratingMin || ratingMax || interviewed || tags || status;
 
   return (
-    <form onSubmit={handleSubmit} className="bg-gray-50 p-4 rounded-lg space-y-3 border">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Ricerca testuale
+    <form onSubmit={handleSubmit} className="surface-card space-y-4 p-4 md:p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div><h2 className="text-sm font-bold text-slate-800">Filtra l’archivio</h2><p className="mt-0.5 text-xs text-slate-500">Ricerca anche nel testo dei curriculum.</p></div>
+        {hasFilters && <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">Filtri attivi</span>}
+      </div>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="md:col-span-2">
+          <label className="mb-1 block text-xs font-semibold text-slate-600">
+            Cerca
           </label>
           <input
             type="text"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Nome, cognome, mansione, note, CV..."
-            className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="mb-1 block text-xs font-semibold text-slate-600">
             Mansione
           </label>
           <input
@@ -72,18 +79,18 @@ export function FilterForm() {
             value={mansione}
             onChange={(e) => setMansione(e.target.value)}
             placeholder="es. Carpentiere"
-            className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="mb-1 block text-xs font-semibold text-slate-600">
             Intervistato
           </label>
           <select
             value={interviewed}
             onChange={(e) => setInterviewed(e.target.value)}
-            className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
           >
             <option value="">Tutti</option>
             <option value="true">Sì</option>
@@ -92,7 +99,18 @@ export function FilterForm() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="mb-1 block text-xs font-semibold text-slate-600">Stato</label>
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20">
+            <option value="">Tutti gli stati</option>
+            <option value="DA_VALUTARE">Da valutare</option>
+            <option value="SHORTLIST">Shortlist</option>
+            <option value="ASSUMERE">Assumere</option>
+            <option value="SCARTATO">Scartato</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-600">
             Rating minimo
           </label>
           <input
@@ -102,12 +120,12 @@ export function FilterForm() {
             placeholder="es. 1"
             min="1"
             max="10"
-            className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="mb-1 block text-xs font-semibold text-slate-600">
             Rating massimo
           </label>
           <input
@@ -117,12 +135,12 @@ export function FilterForm() {
             placeholder="es. 10"
             min="1"
             max="10"
-            className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="mb-1 block text-xs font-semibold text-slate-600">
             Tag (separati da virgola)
           </label>
           <input
@@ -130,15 +148,15 @@ export function FilterForm() {
             value={tags}
             onChange={(e) => setTags(e.target.value)}
             placeholder="es. Saldatura,Carpentiere"
-            className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
           />
         </div>
       </div>
 
-      <div className="flex items-center gap-2 pt-2">
+      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
         <button
           type="submit"
-          className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="touch-button bg-teal-700 text-white hover:bg-teal-800"
         >
           Applica filtri
         </button>
@@ -146,15 +164,10 @@ export function FilterForm() {
           <button
             type="button"
             onClick={handleReset}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400"
+            className="touch-button bg-slate-100 text-slate-700 hover:bg-slate-200"
           >
             Reset
           </button>
-        )}
-        {hasFilters && (
-          <span className="text-sm text-gray-600 ml-2">
-            Filtri attivi
-          </span>
         )}
       </div>
     </form>

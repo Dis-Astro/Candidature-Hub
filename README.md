@@ -6,6 +6,14 @@ La stessa interfaccia è predisposta come PWA responsive e dispone di API Bearer
 
 L'interfaccia segue un approccio **Tablet First**: iPad e tablet Android sono il riferimento principale per navigazione, colloqui e valutazione; desktop e smartphone restano supportati.
 
+### Esperienza iPad First
+
+- rail laterale persistente in verticale e orizzontale, che si espande sui desktop ampi;
+- archivio candidati a schede su iPad, con tabella riservata agli schermi desktop;
+- bersagli tattili da almeno 48 px, aree sicure iOS e assenza di azioni dipendenti dall'hover;
+- dashboard, filtri, scheda candidato e login ottimizzati per le proporzioni 4:3;
+- PWA installabile con scorciatoie per nuovo candidato, archivio e importazioni.
+
 ## Avvio rapido
 
 1. Copiare `.env.example` in `.env`.
@@ -43,3 +51,13 @@ Per ripristinare:
 La stessa procedura permette di cambiare server PostgreSQL: si aggiorna `DATABASE_URL`/la configurazione Compose e si applica l'archivio al nuovo database.
 
 Consultare [docs/DEPLOY.md](docs/DEPLOY.md) per operazioni, sicurezza e diagnosi.
+
+## Avvio su iPad Simulator
+
+Il client iOS usa Capacitor e si trova in `candidature-hub/app/ios`.
+
+1. Verificare che la webapp sia raggiungibile su `http://192.168.0.37:3031`.
+2. Da `candidature-hub/app`, eseguire `pnpm ios:sync`.
+3. Eseguire `pnpm ios:open`, scegliere un simulatore iPad in Xcode e premere Run.
+
+Per collegarsi a un server diverso, impostare `CAPACITOR_SERVER_URL=https://SERVER` prima di `pnpm ios:sync`. In produzione usare sempre HTTPS.

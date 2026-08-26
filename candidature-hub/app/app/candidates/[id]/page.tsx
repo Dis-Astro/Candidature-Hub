@@ -5,6 +5,7 @@ import { prisma } from "../../../lib/prisma";
 import type { Candidate, Interview, CvFile } from "@prisma/client";
 import { InterviewForm } from "../InterviewForm";
 import { requireUser } from "../../../lib/auth";
+import Link from "next/link";
 
 type Params = {
   id?: string;
@@ -80,7 +81,16 @@ export default async function DetailPage({ params, searchParams }: PageProps) {
   const [latestInterview] = candidate.interviews as Interview[];
 
   return (
-    <div className="space-y-4" suppressHydrationWarning>
+    <div className="space-y-5" suppressHydrationWarning>
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <Link href="/candidates" className="mb-3 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-teal-700">← Tutti i candidati</Link>
+          <p className="eyebrow">Profilo #{candidate.displayId}</p>
+          <h1 className="page-title mt-2">{candidate.firstName} {candidate.lastName}</h1>
+          <p className="page-subtitle">Valutazione, colloquio e documenti in un’unica scheda.</p>
+        </div>
+        {candidate.cvFiles[0] && <a href={`/api/files/${candidate.cvFiles[0].id}`} target="_blank" rel="noopener noreferrer" className="touch-button border border-slate-200 bg-white text-slate-700 shadow-sm">Apri il CV ↗</a>}
+      </header>
       <InterviewForm
         candidate={candidate as Candidate & { cvFiles: CvFile[]; interviews: Interview[] }}
         lastInterview={latestInterview ?? null}
@@ -88,4 +98,3 @@ export default async function DetailPage({ params, searchParams }: PageProps) {
     </div>
   );
 }
-

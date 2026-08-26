@@ -130,7 +130,7 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
   }
 
   return (
-    <div className="space-y-4 relative">
+    <div className="relative space-y-4">
       {/* Timbro personalizzato mostrato quando il profilo è certificato. */}
       {profileVerified && (
         <div className="pointer-events-none fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2" aria-hidden="true">
@@ -138,9 +138,9 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
         </div>
       )}
       {/* === HEADER COMPATTO: Anagrafica + Meta === */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 min-[980px]:grid-cols-[minmax(0,1.55fr)_minmax(17rem,.75fr)]">
         {/* Anagrafica - 2/3 */}
-        <section className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+        <section className="surface-card p-4 md:p-5">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               <h2 className="text-base font-semibold text-slate-800">Anagrafica</h2>
@@ -191,7 +191,7 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
         </section>
 
         {/* Meta & Azioni - 1/3 */}
-        <section className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm">
+        <section className="surface-card bg-slate-50/80 p-4 md:p-5 min-[980px]:sticky min-[980px]:top-6 min-[980px]:self-start">
           <h2 className="text-base font-semibold text-slate-800 mb-3">Info & Azioni</h2>
           
           <div className="space-y-2 text-xs">
@@ -216,7 +216,7 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
       </div>
 
       {/* === VALUTAZIONE RAPIDA === */}
-      <section className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+      <section className="surface-card p-4 md:p-5">
         <h2 className="text-base font-semibold text-slate-800 mb-3">Valutazione</h2>
         <QuickActions
           candidateId={candidate.id}
@@ -231,7 +231,7 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
 
       {/* === ULTIMO COLLOQUIO (se esiste) === */}
       {lastInterview && (
-        <section className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 shadow-sm">
+        <section className="rounded-[1.25rem] border border-emerald-200 bg-emerald-50 p-4 shadow-sm md:p-5">
           <div className="flex items-center justify-between mb-2">
             <div>
               <h2 className="text-base font-semibold text-emerald-900">Ultimo colloquio</h2>
@@ -252,7 +252,7 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
       )}
 
       {/* === FORM COLLOQUIO === */}
-      <section className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+      <section className="surface-card p-4 md:p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-slate-800">Colloquio</h2>
           <div className="flex items-center gap-2">

@@ -57,8 +57,12 @@ export default function NewCandidatePage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg p-0 sm:p-6">
-      <h1 className="text-xl font-bold text-slate-800 mb-6">Nuovo candidato</h1>
+    <div className="mx-auto max-w-3xl space-y-5">
+      <header>
+        <p className="eyebrow">Inserimento manuale</p>
+        <h1 className="page-title mt-2">Nuovo candidato</h1>
+        <p className="page-subtitle">Crea il profilo essenziale. Potrai aggiungere colloquio, note e documenti nella scheda successiva.</p>
+      </header>
 
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
@@ -66,7 +70,7 @@ export default function NewCandidatePage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="surface-card space-y-5 p-5 md:p-7">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-[11px] font-medium text-slate-500 uppercase tracking-wide mb-1">
@@ -76,7 +80,7 @@ export default function NewCandidatePage() {
               type="text"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
               placeholder="Mario"
               required
             />
@@ -89,7 +93,7 @@ export default function NewCandidatePage() {
               type="text"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
               placeholder="Rossi"
               required
             />
@@ -104,7 +108,7 @@ export default function NewCandidatePage() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
             placeholder="mario.rossi@email.com"
           />
         </div>
@@ -117,7 +121,7 @@ export default function NewCandidatePage() {
             type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
             placeholder="+39 333 1234567"
           />
         </div>
@@ -129,7 +133,7 @@ export default function NewCandidatePage() {
           <select
             value={mansione}
             onChange={(e) => setMansione(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
           >
             <option value="">— Seleziona —</option>
             {MANSIONE_OPTIONS.map((m) => (
@@ -138,18 +142,18 @@ export default function NewCandidatePage() {
           </select>
         </div>
 
-        <div className="flex gap-3 pt-4">
+        <div className="flex gap-3 border-t border-slate-100 pt-5">
           <button
             type="button"
             onClick={() => router.back()}
-            className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50"
+            className="touch-button flex-1 border border-slate-300 text-slate-700 hover:bg-slate-50"
           >
             Annulla
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="flex-1 px-4 py-2.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50"
+            className="touch-button flex-1 bg-teal-700 text-white hover:bg-teal-800 disabled:opacity-50"
           >
             {saving ? "Creazione..." : "Crea candidato"}
           </button>

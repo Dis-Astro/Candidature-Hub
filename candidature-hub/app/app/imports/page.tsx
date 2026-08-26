@@ -22,13 +22,13 @@ export default async function ImportsPage() {
     prisma.importJob.count({ where: { status: "SUCCESS" } }),
   ]);
   return <div className="space-y-6">
-    <div><h1 className="text-2xl font-bold">Importazioni curriculum</h1><p className="mt-1 text-sm text-slate-600">Controlla in modo semplice email, caricamenti manuali, errori e scansioni antivirus.</p></div>
+    <header><p className="eyebrow">Acquisizione</p><h1 className="page-title mt-2">Importazioni curriculum</h1><p className="page-subtitle">Controlla email, caricamenti manuali, errori e scansioni antivirus.</p></header>
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-      {[["In lavorazione", queued, "text-blue-700"], ["Da controllare", errors, "text-red-700"], ["Acquisiti", completed, "text-emerald-700"]].map(([label, value, cls]) => <div key={String(label)} className="rounded-xl border bg-white p-4 shadow-sm"><div className={`text-3xl font-bold ${cls}`}>{value}</div><div className="text-sm text-slate-600">{label}</div></div>)}
+      {[["In lavorazione", queued, "text-blue-700"], ["Da controllare", errors, "text-red-700"], ["Acquisiti", completed, "text-emerald-700"]].map(([label, value, cls]) => <div key={String(label)} className="surface-card p-4 md:p-5"><div className={`text-3xl font-bold ${cls}`}>{value}</div><div className="mt-1 text-sm font-semibold text-slate-600">{label}</div></div>)}
     </div>
-    <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
-      <div className="hidden grid-cols-[1.2fr_.7fr_.7fr_1.5fr_auto] gap-3 border-b bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 md:grid"><span>File</span><span>Origine</span><span>Stato</span><span>Dettaglio</span><span>Azione</span></div>
-      <div className="divide-y">{jobs.map(job => { const state = labels[job.status] || { text: job.status, cls: "bg-slate-100" }; return <div key={job.id} className="grid gap-3 p-4 md:grid-cols-[1.2fr_.7fr_.7fr_1.5fr_auto] md:items-center">
+    <div className="surface-card overflow-hidden">
+      <div className="hidden grid-cols-[1.2fr_.7fr_.7fr_1.5fr_auto] gap-3 border-b bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 xl:grid"><span>File</span><span>Origine</span><span>Stato</span><span>Dettaglio</span><span>Azione</span></div>
+      <div className="divide-y">{jobs.map(job => { const state = labels[job.status] || { text: job.status, cls: "bg-slate-100" }; return <div key={job.id} className="grid gap-3 p-4 md:grid-cols-2 md:p-5 xl:grid-cols-[1.2fr_.7fr_.7fr_1.5fr_auto] xl:items-center">
         <div><p className="truncate font-medium">{job.filename}</p><p className="text-xs text-slate-500">{job.createdAt.toLocaleString("it-IT")}</p></div>
         <span className="text-sm">{job.source === "EMAIL" ? "Email" : "Manuale"}</span>
         <span><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${state.cls}`}>{state.text}</span></span>

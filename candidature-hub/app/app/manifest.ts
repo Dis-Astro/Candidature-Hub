@@ -8,10 +8,20 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     scope: "/",
     display: "standalone",
-    background_color: "#f8fafc",
-    theme_color: "#0f766e",
+    display_override: ["standalone", "minimal-ui"],
+    orientation: "any",
+    background_color: "#f5f2ec",
+    theme_color: "#f5f2ec",
     lang: "it",
     categories: ["business", "productivity"],
-    icons: [{ src: "/app-icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" }],
+    icons: [
+      { src: "/app-icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
+      { src: "/app-icon.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
+    ],
+    shortcuts: [
+      { name: "Nuovo candidato", short_name: "Nuovo", url: "/candidates/new", icons: [{ src: "/app-icon.svg", sizes: "any", type: "image/svg+xml" }] },
+      { name: "Candidati", short_name: "Candidati", url: "/candidates", icons: [{ src: "/app-icon.svg", sizes: "any", type: "image/svg+xml" }] },
+      { name: "Importazioni", short_name: "Import", url: "/imports", icons: [{ src: "/app-icon.svg", sizes: "any", type: "image/svg+xml" }] },
+    ],
   };
 }
