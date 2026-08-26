@@ -476,7 +476,7 @@ export default function AdminPage() {
                       <tr key={c.displayId} className="border-t">
                         <td className="p-2">{c.displayId}</td>
                         <td className="p-2">{c.firstName} {c.lastName}</td>
-                        <td className="p-2">{new Date(c.updatedAt).toLocaleDateString("it-IT")}</td>
+                        <td className="p-2">{new Date(c.updatedAt).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })}</td>
                         <td className="p-2 text-right">{c.attachmentsCount}</td>
                       </tr>
                     ))}

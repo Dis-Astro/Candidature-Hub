@@ -52,12 +52,14 @@ La stessa procedura permette di cambiare server PostgreSQL: si aggiorna `DATABAS
 
 Consultare [docs/DEPLOY.md](docs/DEPLOY.md) per operazioni, sicurezza e diagnosi.
 
-## Avvio su iPad Simulator
+## App iOS e Android
 
-Il client iOS usa Capacitor e si trova in `candidature-hub/app/ios`.
+I contenitori Capacitor si trovano in `candidature-hub/app/ios` e `candidature-hub/app/android`. L'indirizzo del server non è scritto nel codice: viene scelto durante la sincronizzazione del progetto nativo.
 
-1. Verificare che la webapp sia raggiungibile su `http://192.168.0.37:3031`.
-2. Da `candidature-hub/app`, eseguire `pnpm ios:sync`.
-3. Eseguire `pnpm ios:open`, scegliere un simulatore iPad in Xcode e premere Run.
+In produzione, da `candidature-hub/app`:
 
-Per collegarsi a un server diverso, impostare `CAPACITOR_SERVER_URL=https://SERVER` prima di `pnpm ios:sync`. In produzione usare sempre HTTPS.
+1. impostare `CAPACITOR_SERVER_URL=https://SERVER`;
+2. eseguire `pnpm ios:sync` oppure `pnpm android:sync`;
+3. aprire il progetto con `pnpm ios:open` o `pnpm android:open`.
+
+Solo per prove nella rete locale HTTP impostare anche `CAPACITOR_ALLOW_CLEARTEXT=1`. Se non viene indicato alcun server, l'app mostra la pagina locale di configurazione/indisponibilità e non contiene indirizzi predefiniti. La porta interna Docker resta `3031`.

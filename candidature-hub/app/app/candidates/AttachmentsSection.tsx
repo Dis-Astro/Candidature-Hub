@@ -198,7 +198,7 @@ export function AttachmentsSection({ candidateId }: Props) {
                 <div className="font-medium text-sm truncate">{att.filename}</div>
                 <div className="text-xs text-slate-500">
                   {TYPE_LABELS[att.type] || att.type} • {formatSize(att.size)} •{" "}
-                  {new Date(att.createdAt).toLocaleString("it-IT")}
+                  {new Date(att.createdAt).toLocaleString("it-IT", { timeZone: "Europe/Rome" })}
                 </div>
               </div>
 

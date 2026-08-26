@@ -29,7 +29,7 @@ export default async function ImportsPage() {
     <div className="surface-card overflow-hidden">
       <div className="hidden grid-cols-[1.2fr_.7fr_.7fr_1.5fr_auto] gap-3 border-b bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 xl:grid"><span>File</span><span>Origine</span><span>Stato</span><span>Dettaglio</span><span>Azione</span></div>
       <div className="divide-y">{jobs.map(job => { const state = labels[job.status] || { text: job.status, cls: "bg-slate-100" }; return <div key={job.id} className="grid gap-3 p-4 md:grid-cols-2 md:p-5 xl:grid-cols-[1.2fr_.7fr_.7fr_1.5fr_auto] xl:items-center">
-        <div><p className="truncate font-medium">{job.filename}</p><p className="text-xs text-slate-500">{job.createdAt.toLocaleString("it-IT")}</p></div>
+        <div><p className="truncate font-medium">{job.filename}</p><p className="text-xs text-slate-500">{job.createdAt.toLocaleString("it-IT", { timeZone: "Europe/Rome" })}</p></div>
         <span className="text-sm">{job.source === "EMAIL" ? "Email" : "Manuale"}</span>
         <span><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${state.cls}`}>{state.text}</span></span>
         <div className="text-sm text-slate-600">{job.threat ? `Minaccia: ${job.threat}` : job.message || "—"}{job.candidate && <div><Link className="font-medium text-teal-700 underline" href={`/candidates/${job.candidateId}`}>Apri #{job.candidate.displayId} · {job.candidate.firstName} {job.candidate.lastName}</Link></div>}</div>

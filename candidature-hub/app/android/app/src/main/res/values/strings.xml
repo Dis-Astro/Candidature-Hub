@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Candidature Hub</string>
+    <string name="title_activity_main">Candidature Hub</string>
+    <string name="package_name">it.candidaturehub.app</string>
+    <string name="custom_url_scheme">it.candidaturehub.app</string>
+</resources>

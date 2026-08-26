@@ -236,7 +236,7 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
             <div>
               <h2 className="text-base font-semibold text-emerald-900">Ultimo colloquio</h2>
               <p className="text-xs text-emerald-700">
-                {new Date(lastInterview.date as unknown as string).toLocaleString("it-IT")}
+                {new Date(lastInterview.date as unknown as string).toLocaleString("it-IT", { timeZone: "Europe/Rome" })}
                 {lastInterview.interviewer && ` · ${lastInterview.interviewer}`}
               </p>
             </div>

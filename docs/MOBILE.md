@@ -45,27 +45,26 @@ Per l'uso fuori dalla LAN sono necessari:
 
 L'app deve mostrare uno stato chiaro quando il server non è raggiungibile. I CV e gli allegati non vengono memorizzati offline per impostazione predefinita.
 
-## Progetto iOS
+## Progetti iOS e Android
 
-Il contenitore Capacitor è disponibile in `candidature-hub/app/ios` e usa il bundle identifier `it.candidaturehub.app`. La configurazione condivisa è in `capacitor.config.ts`.
+I contenitori Capacitor sono disponibili in `candidature-hub/app/ios` e `candidature-hub/app/android` e usano l'identificativo `it.candidaturehub.app`. La configurazione condivisa è in `capacitor.config.ts`.
 
-- In sviluppo, il simulatore usa `http://192.168.0.37:3031`.
-- Per cambiare server: `CAPACITOR_SERVER_URL=https://SERVER pnpm ios:sync`.
-- Per aggiornare il progetto nativo: `pnpm ios:sync`.
-- Per aprirlo in Xcode: `pnpm ios:open`.
+- Nessun IP o nome server è incorporato nel repository.
+- Per configurare il server: impostare `CAPACITOR_SERVER_URL=https://SERVER`, quindi eseguire `pnpm ios:sync` o `pnpm android:sync`.
+- Per aggiornare i progetti nativi: `pnpm ios:sync` e `pnpm android:sync`.
+- Per aprirli: `pnpm ios:open` (Xcode) e `pnpm android:open` (Android Studio).
 - Sono abilitate tutte le rotazioni iPad e le safe area vengono gestite dalla UI.
 
-L'uso HTTP in chiaro è limitato allo sviluppo locale. Per dispositivi reali e distribuzione si deve configurare un endpoint HTTPS attendibile.
+L'uso HTTP in chiaro è bloccato per impostazione predefinita. Solo per lo sviluppo locale si può impostare anche `CAPACITOR_ALLOW_CLEARTEXT=1`; per dispositivi reali e distribuzione si deve configurare un endpoint HTTPS attendibile. Senza `CAPACITOR_SERVER_URL` viene inclusa soltanto la pagina locale di indisponibilità, evitando collegamenti accidentali a vecchi server.
 
 ## Fasi successive
 
 1. Definire distribuzione: App Store/Play Store, MDM aziendale o installazione privata.
-2. Aggiungere una schermata nativa di configurazione server al workspace Capacitor già disponibile.
-3. Aggiungere storage sicuro del token, biometria opzionale e deep link.
-4. Integrare fotocamera/scanner PDF e condivisione file nativa.
-5. Aggiungere notifiche push per nuovi CV, errori parser e candidature da valutare.
-6. Test end-to-end su dispositivi reali, accessibilità e perdita di rete.
-7. Informativa privacy, retention mobile e procedura di revoca dispositivi.
+2. Aggiungere storage sicuro del token, biometria opzionale e deep link.
+3. Integrare fotocamera/scanner PDF e condivisione file nativa.
+4. Aggiungere notifiche push per nuovi CV, errori parser e candidature da valutare.
+5. Test end-to-end su dispositivi reali, accessibilità e perdita di rete.
+6. Informativa privacy, retention mobile e procedura di revoca dispositivi.
 
 ## Vincolo di distribuzione iOS
 

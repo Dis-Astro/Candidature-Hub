@@ -304,7 +304,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
               </div>
               <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
                 <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs ${stateBadge.class}`}>{stateBadge.label}</span>
-                <span className="text-xs text-slate-400">Agg. {new Date(candidate.updatedAt).toLocaleDateString("it-IT")}</span>
+                <span className="text-xs text-slate-400">Agg. {new Date(candidate.updatedAt).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })}</span>
               </div>
             </Link>
           );
@@ -387,6 +387,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
                   <td className="px-4 py-3 text-slate-500 text-xs">
                     {new Date(c.updatedAt).toLocaleString("it-IT", {
                       day: "2-digit", month: "2-digit", year: "2-digit",
+                      timeZone: "Europe/Rome",
                     })}
                   </td>
 

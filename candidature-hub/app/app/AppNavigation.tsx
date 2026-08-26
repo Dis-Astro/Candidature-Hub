@@ -38,6 +38,9 @@ function isCurrent(pathname: string, href: string) {
 export function AppNavigation({ role, name, email }: { role: Role; name?: string | null; email: string }) {
   const pathname = usePathname();
   const visibleLinks = links.filter(link => !link.adminOnly || role === "ADMIN");
+  const mobileLinks = role === "ADMIN"
+    ? visibleLinks.filter(link => ["/", "/candidates", "/imports", "/admin"].includes(link.href))
+    : visibleLinks.filter(link => link.href !== "/docs").slice(0, 3);
 
   return <>
     <aside className="app-sidebar" aria-label="Navigazione principale">
@@ -69,7 +72,7 @@ export function AppNavigation({ role, name, email }: { role: Role; name?: string
     </aside>
 
     <nav className="mobile-dock" aria-label="Navigazione mobile">
-      {visibleLinks.filter(link => link.href !== "/docs").slice(0, 4).map(link => {
+      {mobileLinks.map(link => {
         const active = isCurrent(pathname, link.href);
         return <Link key={link.href} href={link.href} aria-current={active ? "page" : undefined} className={`mobile-dock-item ${active ? "is-active" : ""}`}>
           <Icon name={link.icon} className="h-5 w-5" />

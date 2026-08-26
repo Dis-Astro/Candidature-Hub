@@ -14,6 +14,8 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3031 HOSTNAME=0.0.0.0
 COPY --from=build /opt/candidature-hub/app ./
 COPY scripts /opt/candidature-hub/scripts
 COPY docs /opt/candidature-hub/docs
-RUN chmod +x /opt/candidature-hub/scripts/*.sh
+RUN chmod +x /opt/candidature-hub/scripts/*.sh \
+    && mkdir -p /opt/candidature-hub/app/.next/cache/images \
+    && chmod -R 0777 /opt/candidature-hub/app/.next/cache
 EXPOSE 3031
 CMD ["node", "node_modules/next/dist/bin/next", "start"]
