@@ -7,6 +7,7 @@ import type { Candidate, Interview, CvFile } from "@prisma/client";
 import { saveInterviewAction, updateCandidateAction } from "./detail/actions";
 import { AttachmentsSection } from "./AttachmentsSection";
 import { QuickActions } from "./QuickActions";
+import { AuthenticatedFileViewer } from "./AuthenticatedFileViewer";
 
 type CandidateWithRelations = Candidate & {
   interviews: Interview[];
@@ -177,9 +178,13 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
           <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
             <div className="text-xs text-slate-600">
               {latestCv ? (
-                <a href={`/api/files/${latestCv.id}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">
+                <AuthenticatedFileViewer
+                  url={`/api/files/${latestCv.id}`}
+                  filename={`CV ${candidate.firstName} ${candidate.lastName}.pdf`}
+                  className="text-blue-600 hover:text-blue-800 underline"
+                >
                   📄 Apri CV
-                </a>
+                </AuthenticatedFileViewer>
               ) : <span className="text-slate-400">Nessun CV</span>}
             </div>
             <form action={handleUpdateAnagrafica}>

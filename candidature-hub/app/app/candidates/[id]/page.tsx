@@ -6,6 +6,7 @@ import type { Candidate, Interview, CvFile } from "@prisma/client";
 import { InterviewForm } from "../InterviewForm";
 import { requireUser } from "../../../lib/auth";
 import Link from "next/link";
+import { AuthenticatedFileViewer } from "../AuthenticatedFileViewer";
 
 type Params = {
   id?: string;
@@ -89,7 +90,15 @@ export default async function DetailPage({ params, searchParams }: PageProps) {
           <h1 className="page-title mt-2">{candidate.firstName} {candidate.lastName}</h1>
           <p className="page-subtitle">Valutazione, colloquio e documenti in un’unica scheda.</p>
         </div>
-        {candidate.cvFiles[0] && <a href={`/api/files/${candidate.cvFiles[0].id}`} target="_blank" rel="noopener noreferrer" className="touch-button border border-slate-200 bg-white text-slate-700 shadow-sm">Apri il CV ↗</a>}
+        {candidate.cvFiles[0] && (
+          <AuthenticatedFileViewer
+            url={`/api/files/${candidate.cvFiles[0].id}`}
+            filename={`CV ${candidate.firstName} ${candidate.lastName}.pdf`}
+            className="touch-button border border-slate-200 bg-white text-slate-700 shadow-sm"
+          >
+            Apri il CV
+          </AuthenticatedFileViewer>
+        )}
       </header>
       <InterviewForm
         candidate={candidate as Candidate & { cvFiles: CvFile[]; interviews: Interview[] }}

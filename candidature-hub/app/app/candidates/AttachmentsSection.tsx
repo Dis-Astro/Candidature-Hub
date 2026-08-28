@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
+import { AuthenticatedFileViewer } from "./AuthenticatedFileViewer";
 
 type Attachment = {
   id: string;
@@ -192,7 +193,12 @@ export function AttachmentsSection({ candidateId }: Props) {
               key={att.id}
               className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors"
             >
-              <a href={`/api/attachments/${att.id}`} target="_blank" rel="noopener noreferrer" className="flex min-w-0 flex-1 items-center gap-3 rounded-lg focus-visible:outline-offset-4" title={`Apri ${att.filename}`}>
+              <AuthenticatedFileViewer
+                url={`/api/attachments/${att.id}`}
+                filename={att.filename}
+                className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left focus-visible:outline-offset-4"
+                title={`Apri ${att.filename}`}
+              >
                 <span className="text-2xl">{TYPE_ICONS[att.type] || "📎"}</span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium text-slate-800 underline decoration-slate-300 underline-offset-4">{att.filename}</div>
@@ -201,7 +207,7 @@ export function AttachmentsSection({ candidateId }: Props) {
                     {new Date(att.createdAt).toLocaleString("it-IT", { timeZone: "Europe/Rome" })}
                   </div>
                 </div>
-              </a>
+              </AuthenticatedFileViewer>
 
               <div className="flex items-center gap-2">
                 {/* Preview audio inline */}
@@ -215,11 +221,10 @@ export function AttachmentsSection({ candidateId }: Props) {
 
                 {/* Preview immagine */}
                 {isImage(att.mimeType) && (
-                  <a
-                    href={`/api/attachments/${att.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-12 h-12 rounded border overflow-hidden"
+                  <AuthenticatedFileViewer
+                    url={`/api/attachments/${att.id}`}
+                    filename={att.filename}
+                    className="h-12 w-12 overflow-hidden rounded border"
                   >
                     <Image
                       src={`/api/attachments/${att.id}`}
@@ -229,7 +234,7 @@ export function AttachmentsSection({ candidateId }: Props) {
                       unoptimized
                       className="w-full h-full object-cover"
                     />
-                  </a>
+                  </AuthenticatedFileViewer>
                 )}
 
                 {/* Download */}
