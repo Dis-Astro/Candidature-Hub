@@ -1,23 +1,67 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  clearOfflineDraft,
+  createOfflineOperation,
+  loadOfflineDraft,
+  saveOfflineDraft,
+  submitOfflineOperation,
+} from "../../../lib/offline-client";
 
 const MANSIONE_OPTIONS = [
   "Ufficio Tecnico", "Segreteria", "Ufficio Gare", "Operaio",
   "Project Manager", "Ufficio Amministrativo", "Magazziniere", "Autista", "Altro",
 ];
+const DRAFT_KEY = "candidate:new";
+
+type CandidateDraft = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  mansione: string;
+};
 
 export default function NewCandidatePage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const draftLoaded = useRef(false);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [mansione, setMansione] = useState("");
+
+  useEffect(() => {
+    void loadOfflineDraft<CandidateDraft>(DRAFT_KEY).then((draft) => {
+      if (draft) {
+        setFirstName(draft.value.firstName || "");
+        setLastName(draft.value.lastName || "");
+        setEmail(draft.value.email || "");
+        setPhone(draft.value.phone || "");
+        setMansione(draft.value.mansione || "");
+        setNotice("Ho recuperato la bozza che avevi lasciato su questo iPad.");
+      }
+      draftLoaded.current = true;
+    }).catch(() => {
+      draftLoaded.current = true;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!draftLoaded.current) return;
+    const timer = window.setTimeout(() => {
+      const draft = { firstName, lastName, email, phone, mansione };
+      if (Object.values(draft).some(Boolean)) void saveOfflineDraft(DRAFT_KEY, draft);
+      else void clearOfflineDraft(DRAFT_KEY);
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [email, firstName, lastName, mansione, phone]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -28,27 +72,33 @@ export default function NewCandidatePage() {
 
     setSaving(true);
     setError(null);
+    setNotice(null);
 
     try {
-      const res = await fetch("/api/candidates", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const result = await submitOfflineOperation(
+        createOfflineOperation("candidate.create", {
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           email: email.trim() || null,
           phone: phone.trim() || null,
           mansione: mansione || null,
-        }),
-      });
+        })
+      );
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Errore nella creazione");
+      if (result.status === "applied" || result.status === "duplicate") {
+        await clearOfflineDraft(DRAFT_KEY);
+        router.push(`/candidates/${result.displayId}`);
+        return;
       }
+      if (result.message !== "queued") throw new Error(result.message || "La sincronizzazione richiede un controllo.");
 
-      const data = await res.json();
-      router.push(`/candidates/${data.displayId}`);
+      await clearOfflineDraft(DRAFT_KEY);
+      setFirstName("");
+      setLastName("");
+      setEmail("");
+      setPhone("");
+      setMansione("");
+      setNotice("Candidato salvato su questo iPad. Lo invierò automaticamente al server appena torna la connessione.");
     } catch (err) {
       setError(String(err));
     } finally {
@@ -67,6 +117,12 @@ export default function NewCandidatePage() {
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
           {error}
+        </div>
+      )}
+
+      {notice && (
+        <div className="rounded-xl border border-teal-200 bg-teal-50 p-3 text-sm font-medium text-teal-900" role="status">
+          {notice}
         </div>
       )}
 

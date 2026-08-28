@@ -57,6 +57,7 @@ export default async function DetailPage({ searchParams }: DetailPageProps) {
       <InterviewForm
         candidate={typedCandidate}
         lastInterview={lastInterview}
+        previousInterviews={typedCandidate.interviews.slice(1)}
         canEdit={user.role !== "VIEWER"}
         canDelete={user.role === "ADMIN"}
       />

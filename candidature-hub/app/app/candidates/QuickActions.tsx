@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { createOfflineOperation, submitOfflineOperation } from "../../lib/offline-client";
 
 type CandidateStatus = "DA_VALUTARE" | "SCARTATO" | "SHORTLIST" | "ASSUMERE";
 
@@ -10,6 +11,7 @@ type Props = {
   discarded: boolean;
   rating: number | null;
   decision: string | null;
+  baseUpdatedAt: string;
   canEdit?: boolean;
 };
 
@@ -27,7 +29,7 @@ const STATUS_CONFIG: Record<CandidateStatus, { label: string; icon: string; clas
   ASSUMERE: { label: "Assumere", icon: "★", class: "bg-amber-100 text-amber-800 border-amber-300" },
 };
 
-export function QuickActions({ candidateId, discarded, rating, decision, canEdit = true }: Props) {
+export function QuickActions({ candidateId, discarded, rating, decision, baseUpdatedAt, canEdit = true }: Props) {
   const router = useRouter();
   const [acting, setActing] = useState(false);
   const [localDiscarded, setLocalDiscarded] = useState(discarded);
@@ -44,17 +46,22 @@ export function QuickActions({ candidateId, discarded, rating, decision, canEdit
   };
 
   const handleAction = async (action: "discard" | "restore" | "shortlist" | "hire") => {
+    if (action === "discard" && !window.confirm("Confermi di voler scartare questo candidato?")) return;
+    if (action === "hire" && !window.confirm("Confermi la decisione Assumere?")) return;
     setActing(true);
     try {
-      const res = await fetch(`/api/candidates/${candidateId}/quick-action`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
+      const result = await submitOfflineOperation(createOfflineOperation(
+        "candidate.quickAction",
+        { action },
+        { candidateId, baseUpdatedAt }
+      ));
 
-      if (!res.ok) {
-        const err = await res.json();
-        showToast("error", err.error || "Errore");
+      if (result.status === "conflict") {
+        showToast("error", result.message || "Scheda modificata sul server: ricaricala.");
+        return;
+      }
+      if (result.status === "error" && result.message !== "queued") {
+        showToast("error", result.message || "Errore");
         return;
       }
 
@@ -62,23 +69,23 @@ export function QuickActions({ candidateId, discarded, rating, decision, canEdit
       if (action === "discard") {
         setLocalDiscarded(true);
         setLocalDecision(null);
-        showToast("success", "✕ Scartato");
+        showToast("success", result.message === "queued" ? "✕ Scartato sull’iPad · in attesa di sincronizzazione" : "✕ Scartato");
       } else if (action === "restore") {
         setLocalDiscarded(false);
         setLocalRating(null);
         setLocalDecision(null);
-        showToast("success", "○ Ripristinato");
+        showToast("success", result.message === "queued" ? "○ Ripristinato sull’iPad · in attesa di sincronizzazione" : "○ Ripristinato");
       } else if (action === "shortlist") {
         setLocalDiscarded(false);
         setLocalRating(5);
-        showToast("success", "✓ Shortlist");
+        showToast("success", result.message === "queued" ? "✓ Shortlist salvata sull’iPad" : "✓ Shortlist");
       } else if (action === "hire") {
         setLocalDiscarded(false);
         setLocalDecision("ASSUME");
-        showToast("success", "★ Assumere");
+        showToast("success", result.message === "queued" ? "★ Decisione salvata sull’iPad" : "★ Assumere");
       }
 
-      router.refresh();
+      if (result.status !== "error") router.refresh();
     } catch (e) {
       showToast("error", String(e));
     } finally {

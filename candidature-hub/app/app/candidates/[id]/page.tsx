@@ -103,6 +103,7 @@ export default async function DetailPage({ params, searchParams }: PageProps) {
       <InterviewForm
         candidate={candidate as Candidate & { cvFiles: CvFile[]; interviews: Interview[] }}
         lastInterview={latestInterview ?? null}
+        previousInterviews={(candidate.interviews as Interview[]).slice(1)}
         canEdit={user.role !== "VIEWER"}
         canDelete={user.role === "ADMIN"}
       />

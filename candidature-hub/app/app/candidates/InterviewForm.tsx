@@ -1,13 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { Candidate, Interview, CvFile } from "@prisma/client";
-import { saveInterviewAction, updateCandidateAction } from "./detail/actions";
 import { AttachmentsSection } from "./AttachmentsSection";
 import { QuickActions } from "./QuickActions";
 import { AuthenticatedFileViewer } from "./AuthenticatedFileViewer";
+import {
+  clearOfflineDraft,
+  createOfflineOperation,
+  loadOfflineDraft,
+  saveOfflineDraft,
+  submitOfflineOperation,
+} from "../../lib/offline-client";
 
 type CandidateWithRelations = Candidate & {
   interviews: Interview[];
@@ -22,6 +28,15 @@ type Props = {
   canDelete: boolean;
 };
 
+type CandidateSearchResult = {
+  id: string;
+  displayId: number;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  mansione: string | null;
+};
+
 const MANSIONE_OPTIONS = [
   "Ufficio Tecnico", "Segreteria", "Ufficio Gare", "Operaio",
   "Project Manager", "Ufficio Amministrativo", "Magazziniere", "Autista", "Altro",
@@ -29,7 +44,7 @@ const MANSIONE_OPTIONS = [
 
 const PATENTE_OPTIONS = ["A", "B", "C", "D", "E", "CQC"];
 
-export function InterviewForm({ candidate, lastInterview, canEdit, canDelete }: Props) {
+export function InterviewForm({ candidate, lastInterview, previousInterviews = [], canEdit, canDelete }: Props) {
   const router = useRouter();
   const [firstName, setFirstName] = useState(candidate.firstName);
   const [lastName, setLastName] = useState(candidate.lastName);
@@ -57,6 +72,13 @@ export function InterviewForm({ candidate, lastInterview, canEdit, canDelete }: 
   const [isMerging, setIsMerging] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [mergeTargetId, setMergeTargetId] = useState("");
+  const [mergeQuery, setMergeQuery] = useState("");
+  const [mergeResults, setMergeResults] = useState<CandidateSearchResult[]>([]);
+  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const interviewFormRef = useRef<HTMLFormElement>(null);
+  const draftHydrated = useRef(false);
+  const draftTimer = useRef<number | null>(null);
+  const draftKey = `interview:${candidate.id}`;
 
   const primaryMansione = selectedRoles[0] ?? "";
   const latestCv: CvFile | null = candidate.cvFiles?.[0] ?? null;
@@ -72,38 +94,144 @@ export function InterviewForm({ candidate, lastInterview, canEdit, canDelete }: 
   function toggleLicense(code: string) {
     setDrivingLicenses(prev => prev.includes(code) ? prev.filter(r => r !== code) : [...prev, code]);
   }
-  async function handleUpdateAnagrafica(formData: FormData) {
+  function showNotice(type: "success" | "error", message: string) {
+    setNotice({ type, message });
+    window.setTimeout(() => setNotice(null), 6_000);
+  }
+
+  const saveCurrentDraft = useCallback(() => {
+    if (!draftHydrated.current || !interviewFormRef.current) return;
+    if (draftTimer.current) window.clearTimeout(draftTimer.current);
+    draftTimer.current = window.setTimeout(() => {
+      const values = Object.fromEntries(new FormData(interviewFormRef.current!).entries()) as Record<string, unknown>;
+      Object.assign(values, {
+        firstName,
+        lastName,
+        email,
+        phone,
+        selectedRoles,
+        rating,
+        drivingLicenses,
+        interviewNotes,
+        profileVerified,
+      });
+      void saveOfflineDraft(draftKey, values);
+    }, 450);
+  }, [draftKey, drivingLicenses, email, firstName, interviewNotes, lastName, phone, profileVerified, rating, selectedRoles]);
+
+  useEffect(() => {
+    void loadOfflineDraft<Record<string, unknown>>(draftKey).then((draft) => {
+      if (draft) {
+        const value = draft.value;
+        if (typeof value.firstName === "string") setFirstName(value.firstName);
+        if (typeof value.lastName === "string") setLastName(value.lastName);
+        if (typeof value.email === "string") setEmail(value.email);
+        if (typeof value.phone === "string") setPhone(value.phone);
+        if (Array.isArray(value.selectedRoles)) setSelectedRoles(value.selectedRoles.map(String));
+        if (Array.isArray(value.drivingLicenses)) setDrivingLicenses(value.drivingLicenses.map(String));
+        if (typeof value.interviewNotes === "string") setInterviewNotes(value.interviewNotes);
+        if (typeof value.profileVerified === "boolean") setProfileVerified(value.profileVerified);
+        if (typeof value.rating === "number" || value.rating === "") setRating(value.rating);
+
+        window.requestAnimationFrame(() => {
+          const form = interviewFormRef.current;
+          if (form) {
+            for (const element of Array.from(form.elements)) {
+              if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement)) continue;
+              const saved = value[element.name];
+              if (saved == null || !element.name || element.type === "checkbox") continue;
+              if (element instanceof HTMLInputElement && element.type === "radio") element.checked = saved === element.value;
+              else element.value = String(saved);
+            }
+          }
+          draftHydrated.current = true;
+          showNotice("success", "Bozza del colloquio recuperata da questo iPad.");
+        });
+      } else {
+        draftHydrated.current = true;
+      }
+    }).catch(() => { draftHydrated.current = true; });
+    return () => {
+      if (draftTimer.current) window.clearTimeout(draftTimer.current);
+    };
+  }, [draftKey]);
+
+  useEffect(() => {
+    saveCurrentDraft();
+  }, [saveCurrentDraft]);
+
+  useEffect(() => {
+    if (mergeQuery.trim().length < 2 || mergeTargetId) {
+      setMergeResults([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/candidates/search?q=${encodeURIComponent(mergeQuery)}&exclude=${encodeURIComponent(candidate.id)}`, { signal: controller.signal });
+        if (response.ok) {
+          const body = await response.json() as { candidates: CandidateSearchResult[] };
+          setMergeResults(body.candidates);
+        }
+      } catch {
+        // La ricerca è solo un aiuto visivo: la scheda resta utilizzabile anche senza rete.
+      }
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [candidate.id, mergeQuery, mergeTargetId]);
+
+  async function handleUpdateAnagrafica() {
     setIsSavingAnagrafica(true);
     try {
-      formData.set("candidateId", candidate.id);
-      formData.set("firstName", firstName.trim());
-      formData.set("lastName", lastName.trim());
-      formData.set("email", email.trim());
-      formData.set("phone", phone.trim());
-      formData.set("mansione", primaryMansione.trim());
-      await updateCandidateAction(formData);
-      window.location.reload();
+      const result = await submitOfflineOperation(createOfflineOperation("candidate.update", {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        mansione: primaryMansione.trim(),
+      }, { candidateId: candidate.id, baseUpdatedAt: candidate.updatedAt.toISOString() }));
+      if (result.status === "applied" || result.status === "duplicate") {
+        window.location.reload();
+      }
+      else if (result.status === "conflict") showNotice("error", result.message || "La scheda è cambiata sul server: ricaricala prima di salvare.");
+      else if (result.message === "queued") showNotice("success", "Anagrafica salvata sull’iPad: verrà sincronizzata automaticamente.");
+      else showNotice("error", result.message || "Salvataggio non riuscito.");
     } finally { setIsSavingAnagrafica(false); }
   }
 
   async function handleSaveInterview(formData: FormData) {
     setIsSavingInterview(true);
     try {
-      formData.set("candidateId", candidate.id);
-      formData.set("firstName", firstName.trim());
-      formData.set("lastName", lastName.trim());
-      formData.set("email", email.trim());
-      formData.set("phone", phone.trim());
-      formData.set("mansione", primaryMansione.trim());
-      selectedRoles.forEach(role => formData.append("mansione", role));
-      if (rating !== "" && !Number.isNaN(Number(rating))) formData.set("rating", String(rating));
-      else formData.delete("rating");
-      formData.delete("drivingLicenses");
-      drivingLicenses.forEach(code => formData.append("drivingLicenses", code));
-      formData.set("interviewNotes", interviewNotes);
-      formData.set("profileVerified", String(profileVerified));
-      await saveInterviewAction(formData);
-      window.location.reload();
+      const payload = Object.fromEntries(formData.entries()) as Record<string, unknown>;
+      Object.assign(payload, {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        roles: selectedRoles,
+        rating: rating === "" ? null : rating,
+        drivingLicenses,
+        interviewNotes,
+        profileVerified,
+      });
+      const result = await submitOfflineOperation(createOfflineOperation("interview.save", payload, {
+        candidateId: candidate.id,
+        baseUpdatedAt: candidate.updatedAt.toISOString(),
+      }));
+      if (result.status === "applied" || result.status === "duplicate") {
+        await clearOfflineDraft(draftKey);
+        window.location.reload();
+      }
+      else if (result.status === "conflict") showNotice("error", result.message || "La scheda è cambiata sul server: ricaricala prima di salvare.");
+      else if (result.message === "queued") {
+        await clearOfflineDraft(draftKey);
+        draftHydrated.current = false;
+        showNotice("success", "Colloquio custodito sull’iPad. Sarà sincronizzato automaticamente appena torna la rete.");
+      }
+      else showNotice("error", result.message || "Salvataggio non riuscito.");
     } finally { setIsSavingInterview(false); }
   }
 
@@ -134,6 +262,11 @@ export function InterviewForm({ candidate, lastInterview, canEdit, canDelete }: 
 
   return (
     <div className="relative space-y-4">
+      {notice && (
+        <div className={`fixed left-4 right-4 top-[max(1rem,env(safe-area-inset-top))] z-[150] mx-auto max-w-2xl rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-2xl ${notice.type === "success" ? "bg-teal-700" : "bg-red-700"}`} role="status">
+          {notice.message}
+        </div>
+      )}
       {/* Timbro personalizzato mostrato quando il profilo è certificato. */}
       {profileVerified && (
         <div className="pointer-events-none fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2" aria-hidden="true">
@@ -210,11 +343,37 @@ export function InterviewForm({ candidate, lastInterview, canEdit, canDelete }: 
 
           {(canEdit || canDelete) && <div className="mt-4 pt-3 border-t border-slate-200 space-y-2">
             {canEdit && (
-            <div className="flex gap-2">
-              <input type="text" placeholder="ID target (cv_...)" className="flex-1 text-[11px] rounded border px-2 py-1" value={mergeTargetId} onChange={e => setMergeTargetId(e.target.value)} />
+            <div className="relative flex gap-2">
+              <input
+                type="search"
+                placeholder="Cerca candidato da unire…"
+                aria-label="Cerca il candidato di destinazione"
+                className="min-h-10 flex-1 rounded-lg border px-2 text-[11px]"
+                value={mergeQuery}
+                onChange={e => { setMergeQuery(e.target.value); setMergeTargetId(""); }}
+              />
               <button onClick={handleMerge} disabled={isMerging || !mergeTargetId.trim()} className="px-2 py-1 text-[11px] rounded bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50">
                 Unisci
               </button>
+              {mergeResults.length > 0 && (
+                <div className="absolute left-0 right-16 top-full z-40 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                  {mergeResults.map(result => (
+                    <button
+                      key={result.id}
+                      type="button"
+                      onClick={() => {
+                        setMergeTargetId(result.id);
+                        setMergeQuery(`#${result.displayId} · ${result.firstName} ${result.lastName}`);
+                        setMergeResults([]);
+                      }}
+                      className="block w-full border-b border-slate-100 px-3 py-2 text-left last:border-0 hover:bg-slate-50"
+                    >
+                      <span className="block text-xs font-semibold text-slate-800">#{result.displayId} · {result.firstName} {result.lastName}</span>
+                      <span className="block truncate text-[10px] text-slate-500">{result.mansione || "Mansione non indicata"}{result.email ? ` · ${result.email}` : ""}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             )}
             {canDelete && <button onClick={handleDelete} disabled={isDeleting} className="w-full px-2 py-1.5 text-[11px] rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">
@@ -233,6 +392,7 @@ export function InterviewForm({ candidate, lastInterview, canEdit, canDelete }: 
           rating={candidate.rating}
           decision={lastInterview?.decision ?? null}
           canEdit={canEdit}
+          baseUpdatedAt={candidate.updatedAt.toISOString()}
         />
       </section>
 
@@ -261,6 +421,32 @@ export function InterviewForm({ candidate, lastInterview, canEdit, canDelete }: 
         </section>
       )}
 
+      {previousInterviews.length > 0 && (
+        <details className="surface-card overflow-hidden">
+          <summary className="cursor-pointer list-none px-4 py-4 text-sm font-semibold text-slate-800 md:px-5">
+            Storico colloqui <span className="ml-2 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">{previousInterviews.length}</span>
+          </summary>
+          <div className="border-t border-slate-100 px-4 pb-4 md:px-5">
+            {previousInterviews.map((interview) => (
+              <article key={interview.id} className="border-b border-slate-100 py-4 last:border-0">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-800">
+                    {new Date(interview.date as unknown as string).toLocaleString("it-IT", { timeZone: "Europe/Rome" })}
+                    {interview.interviewer && <span className="font-normal text-slate-500"> · {interview.interviewer}</span>}
+                  </p>
+                  <div className="flex gap-2 text-xs font-semibold">
+                    {interview.score !== null && <span className="rounded-full bg-slate-100 px-2 py-1">{interview.score}/10</span>}
+                    {interview.decision && <span className="rounded-full bg-teal-50 px-2 py-1 text-teal-800">{interview.decision.replaceAll("_", " ")}</span>}
+                  </div>
+                </div>
+                {interview.notes && <p className="mt-2 whitespace-pre-line text-sm text-slate-600">{interview.notes}</p>}
+                {interview.hrNotes && <p className="mt-2 whitespace-pre-line text-xs text-slate-500"><strong>Note HR:</strong> {interview.hrNotes}</p>}
+              </article>
+            ))}
+          </div>
+        </details>
+      )}
+
       {/* === FORM COLLOQUIO === */}
       <section className="surface-card p-4 md:p-5">
         <div className="flex items-center justify-between mb-4">
@@ -274,7 +460,7 @@ export function InterviewForm({ candidate, lastInterview, canEdit, canDelete }: 
           </div>
         </div>
 
-        <form action={handleSaveInterview} className="space-y-4">
+        <form ref={interviewFormRef} action={handleSaveInterview} onInput={saveCurrentDraft} onChange={saveCurrentDraft} className="space-y-4">
           <input type="hidden" name="candidateId" value={candidate.id} />
           <input type="hidden" name="rating" value={rating === "" ? "" : String(rating)} />
           <input type="hidden" name="profileVerified" value={String(profileVerified)} />
@@ -371,7 +557,7 @@ export function InterviewForm({ candidate, lastInterview, canEdit, canDelete }: 
           </div>
 
           {/* Decisione + Firma */}
-          <div className="flex flex-wrap items-end gap-4 pt-2 border-t border-slate-100">
+          <div className="sticky bottom-[5.75rem] z-30 -mx-2 flex flex-wrap items-end gap-4 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-[0_-8px_30px_rgba(15,23,42,.10)] backdrop-blur lg:bottom-4">
             <div className="min-w-0 flex-1 sm:min-w-[200px]">
               <label className="block text-[11px] font-medium text-slate-500 uppercase tracking-wide mb-2">Decisione</label>
               <div className="flex gap-2">

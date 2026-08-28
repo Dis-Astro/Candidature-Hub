@@ -24,7 +24,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 }
 
-private enum ServerPreferences {
+enum ServerPreferences {
     static let key = "candidatureHub.serverURL"
 
     static var savedURL: URL? {
@@ -234,13 +234,19 @@ private final class InternalDocumentViewController: UIViewController, WKNavigati
 private final class ServerContainerViewController: UIViewController {
     private var bridgeViewController: ConfigurableBridgeViewController?
     private let settingsButton = UIButton(type: .system)
+    private let offlineButton = UIButton(type: .system)
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
+    private var syncTimer: Timer?
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = UIColor(red: 0.961, green: 0.949, blue: 0.925, alpha: 1)
         installBridge(for: ServerPreferences.savedURL)
         configureSettingsButton()
+        configureOfflineButton()
+        updateOfflineButton()
+        syncTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in self?.attemptOfflineSync() }
+        attemptOfflineSync()
 
         if ServerPreferences.savedURL == nil {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
@@ -248,6 +254,8 @@ private final class ServerContainerViewController: UIViewController {
             }
         }
     }
+
+    deinit { syncTimer?.invalidate() }
 
     private func installBridge(for serverURL: URL?) {
         if let current = bridgeViewController {
@@ -302,6 +310,55 @@ private final class ServerContainerViewController: UIViewController {
         ])
     }
 
+    private func configureOfflineButton() {
+        var configuration = UIButton.Configuration.filled()
+        configuration.image = UIImage(systemName: "icloud.slash.fill")
+        configuration.imagePadding = 7
+        configuration.baseForegroundColor = UIColor(red: 0.251, green: 0.325, blue: 0.416, alpha: 1)
+        configuration.baseBackgroundColor = UIColor(white: 1, alpha: 0.96)
+        configuration.cornerStyle = .capsule
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
+        offlineButton.configuration = configuration
+        offlineButton.layer.shadowColor = UIColor.black.cgColor
+        offlineButton.layer.shadowOpacity = 0.16
+        offlineButton.layer.shadowRadius = 10
+        offlineButton.layer.shadowOffset = CGSize(width: 0, height: 4)
+        offlineButton.accessibilityLabel = "Registrazione candidato offline"
+        offlineButton.addTarget(self, action: #selector(showOfflineCapture), for: .touchUpInside)
+        offlineButton.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(offlineButton)
+
+        NSLayoutConstraint.activate([
+            offlineButton.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 18),
+            offlineButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -18),
+            offlineButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 48),
+        ])
+    }
+
+    private func updateOfflineButton(count: Int = OfflineOperationStore.shared.count) {
+        offlineButton.configuration?.title = count > 0 ? "Offline · \(count)" : "Offline"
+        offlineButton.configuration?.baseBackgroundColor = count > 0
+            ? UIColor(red: 1.0, green: 0.922, blue: 0.678, alpha: 0.98)
+            : UIColor(white: 1, alpha: 0.96)
+    }
+
+    @objc private func showOfflineCapture() {
+        let controller = OfflineCaptureViewController()
+        controller.onSaved = { [weak self] in
+            self?.updateOfflineButton()
+            self?.attemptOfflineSync()
+        }
+        let navigation = UINavigationController(rootViewController: controller)
+        navigation.modalPresentationStyle = .formSheet
+        present(navigation, animated: true)
+    }
+
+    private func attemptOfflineSync() {
+        NativeOfflineSync.shared.synchronize(serverURL: ServerPreferences.savedURL) { [weak self] count in
+            self?.updateOfflineButton(count: count)
+        }
+    }
+
     @objc private func showServerSettings() {
         let alert = UIAlertController(
             title: "Server Candidature Hub",
@@ -345,7 +402,9 @@ private final class ServerContainerViewController: UIViewController {
                     ServerPreferences.save(url)
                     self.installBridge(for: url)
                     self.view.bringSubviewToFront(self.settingsButton)
+                    self.view.bringSubviewToFront(self.offlineButton)
                     self.view.bringSubviewToFront(self.activityIndicator)
+                    self.attemptOfflineSync()
                 } else {
                     self.showConnectionError(for: url, error: error)
                 }
@@ -367,6 +426,8 @@ private final class ServerContainerViewController: UIViewController {
             ServerPreferences.save(url)
             self?.installBridge(for: url)
             if let button = self?.settingsButton { self?.view.bringSubviewToFront(button) }
+            if let button = self?.offlineButton { self?.view.bringSubviewToFront(button) }
+            self?.attemptOfflineSync()
         })
         present(alert, animated: true)
     }
