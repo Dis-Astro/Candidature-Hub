@@ -25,7 +25,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Candidature Hub si collega al server aziendale scelto dall'amministratore.</string>
+	<string>Candidature Hub si collega al server aziendale scelto nelle impostazioni dell’app.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

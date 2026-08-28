@@ -51,6 +51,7 @@ I contenitori Capacitor sono disponibili in `candidature-hub/app/ios` e `candida
 
 - Nessun IP o nome server è incorporato nel repository.
 - Per configurare il server: impostare `CAPACITOR_SERVER_URL=https://SERVER`, quindi eseguire `pnpm ios:sync` o `pnpm android:sync`.
+- Nell’app iOS installata il server può essere scelto senza ricompilare: al primo avvio compare la configurazione e, in seguito, resta disponibile dal pulsante **Server** in basso a destra. L’indirizzo viene verificato e salvato sul dispositivo.
 - Per aggiornare i progetti nativi: `pnpm ios:sync` e `pnpm android:sync`.
 - Per aprirli: `pnpm ios:open` (Xcode) e `pnpm android:open` (Android Studio).
 - Sono abilitate tutte le rotazioni iPad e le safe area vengono gestite dalla UI.
