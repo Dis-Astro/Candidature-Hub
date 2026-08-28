@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import WebKit
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
@@ -71,6 +72,13 @@ private final class ConfigurableBridgeViewController: CAPBridgeViewController {
             descriptor.allowedNavigationHostnames = [hostname]
         }
         return descriptor
+    }
+
+    override func webViewConfiguration(for instanceConfiguration: InstanceConfiguration) -> WKWebViewConfiguration {
+        let configuration = super.webViewConfiguration(for: instanceConfiguration)
+        configuration.websiteDataStore = .default()
+        configuration.preferences.isTextInteractionEnabled = true
+        return configuration
     }
 }
 

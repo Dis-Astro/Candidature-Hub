@@ -192,15 +192,16 @@ export function AttachmentsSection({ candidateId }: Props) {
               key={att.id}
               className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors"
             >
-              <span className="text-2xl">{TYPE_ICONS[att.type] || "📎"}</span>
-
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-sm truncate">{att.filename}</div>
-                <div className="text-xs text-slate-500">
-                  {TYPE_LABELS[att.type] || att.type} • {formatSize(att.size)} •{" "}
-                  {new Date(att.createdAt).toLocaleString("it-IT", { timeZone: "Europe/Rome" })}
+              <a href={`/api/attachments/${att.id}`} target="_blank" rel="noopener noreferrer" className="flex min-w-0 flex-1 items-center gap-3 rounded-lg focus-visible:outline-offset-4" title={`Apri ${att.filename}`}>
+                <span className="text-2xl">{TYPE_ICONS[att.type] || "📎"}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-slate-800 underline decoration-slate-300 underline-offset-4">{att.filename}</div>
+                  <div className="text-xs text-slate-500">
+                    {TYPE_LABELS[att.type] || att.type} • {formatSize(att.size)} •{" "}
+                    {new Date(att.createdAt).toLocaleString("it-IT", { timeZone: "Europe/Rome" })}
+                  </div>
                 </div>
-              </div>
+              </a>
 
               <div className="flex items-center gap-2">
                 {/* Preview audio inline */}

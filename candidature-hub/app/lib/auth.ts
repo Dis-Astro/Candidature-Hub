@@ -7,6 +7,7 @@ import { prisma } from "./prisma";
 
 export const SESSION_COOKIE = "candidature_session";
 const SESSION_DAYS = 12;
+export const REMEMBERED_SESSION_DAYS = 180;
 
 function tokenHash(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -30,9 +31,10 @@ async function userFromToken(token: string) {
   return session.user;
 }
 
-export async function createSession(userId: string): Promise<{ token: string; expiresAt: Date }> {
+export async function createSession(userId: string, durationDays = SESSION_DAYS): Promise<{ token: string; expiresAt: Date }> {
   const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + SESSION_DAYS * 86400_000);
+  const safeDurationDays = Math.max(1, Math.min(durationDays, REMEMBERED_SESSION_DAYS));
+  const expiresAt = new Date(Date.now() + safeDurationDays * 86400_000);
   await prisma.session.create({ data: { userId, tokenHash: tokenHash(token), expiresAt } });
   return { token, expiresAt };
 }

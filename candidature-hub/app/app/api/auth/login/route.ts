@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
-import { createSession, SESSION_COOKIE } from "../../../../lib/auth";
+import { createSession, REMEMBERED_SESSION_DAYS, SESSION_COOKIE } from "../../../../lib/auth";
 import { verifyPassword } from "../../../../lib/password";
 
 const attempts = new Map<string, { count: number; resetAt: number }>();
@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
+  const remember = body.remember !== false;
   const user = email ? await prisma.user.findUnique({ where: { email } }) : null;
   if (!user || !user.isActive || !verifyPassword(password, user.passwordHash)) {
     const state = attempts.get(key) || { count: 0, resetAt: now + 15 * 60_000 };
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Credenziali non valide" }, { status: 401 });
   }
   attempts.delete(key);
-  const session = await createSession(user.id);
+  const session = await createSession(user.id, remember ? REMEMBERED_SESSION_DAYS : 1);
   const response = NextResponse.json({ ok: true, role: user.role });
   response.cookies.set(SESSION_COOKIE, session.token, {
     httpOnly: true, sameSite: "strict", secure: process.env.COOKIE_SECURE === "1",

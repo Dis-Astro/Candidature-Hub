@@ -7,6 +7,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(true);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -15,7 +16,7 @@ export default function LoginPage() {
     const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: data.get("email"), password: data.get("password") }),
+      body: JSON.stringify({ email: data.get("email"), password: data.get("password"), remember }),
     });
     setBusy(false);
     if (!response.ok) {
@@ -38,7 +39,11 @@ export default function LoginPage() {
       <div><h1 className="text-2xl font-semibold">Accedi</h1><p className="mt-1 text-sm text-slate-500">Inserisci le credenziali assegnate dall’amministratore.</p></div>
       <label className="block text-sm font-medium">Email<input name="email" type="email" required autoFocus autoCapitalize="none" autoComplete="username" className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20" /></label>
       <label className="block text-sm font-medium">Password<input name="password" type={showPassword ? "text" : "password"} required autoComplete="current-password" className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20" /></label>
-      <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showPassword} onChange={event => setShowPassword(event.target.checked)} />Mostra password</label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="flex min-h-11 items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={remember} onChange={event => setRemember(event.target.checked)} />Resta collegato</label>
+        <label className="flex min-h-11 items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showPassword} onChange={event => setShowPassword(event.target.checked)} />Mostra password</label>
+      </div>
+      <p className="text-xs leading-5 text-slate-500">Con “Resta collegato” l’accesso viene ricordato su questo dispositivo senza salvare la password.</p>
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       <button disabled={busy} className="primary-action w-full rounded-xl px-4 py-3 font-semibold disabled:opacity-60">{busy ? "Accesso…" : "Accedi"}</button>
     </form>
