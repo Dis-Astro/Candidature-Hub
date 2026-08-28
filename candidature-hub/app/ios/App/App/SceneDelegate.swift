@@ -52,6 +52,7 @@ private enum ServerPreferences {
 
 private final class ConfigurableBridgeViewController: CAPBridgeViewController {
     private let configuredServerURL: URL?
+    private var internalLinkDelegate: InternalLinkUIDelegate?
 
     init(serverURL: URL?) {
         configuredServerURL = serverURL
@@ -79,6 +80,154 @@ private final class ConfigurableBridgeViewController: CAPBridgeViewController {
         configuration.websiteDataStore = .default()
         configuration.preferences.isTextInteractionEnabled = true
         return configuration
+    }
+
+    override func capacitorDidLoad() {
+        super.capacitorDidLoad()
+        guard let webView, let originalDelegate = webView.uiDelegate else { return }
+        let delegate = InternalLinkUIDelegate(
+            original: originalDelegate,
+            allowedHost: configuredServerURL?.host,
+            presenter: self
+        )
+        internalLinkDelegate = delegate
+        webView.uiDelegate = delegate
+        webView.allowsBackForwardNavigationGestures = true
+    }
+
+    fileprivate func presentDocument(request: URLRequest) {
+        guard presentedViewController == nil else { return }
+        let document = InternalDocumentViewController(request: request)
+        let navigation = UINavigationController(rootViewController: document)
+        navigation.modalPresentationStyle = .fullScreen
+        present(navigation, animated: true)
+    }
+}
+
+private final class InternalLinkUIDelegate: NSObject, WKUIDelegate {
+    private weak var original: (any WKUIDelegate)?
+    private weak var presenter: ConfigurableBridgeViewController?
+    private let allowedHost: String?
+
+    init(original: any WKUIDelegate, allowedHost: String?, presenter: ConfigurableBridgeViewController) {
+        self.original = original
+        self.allowedHost = allowedHost
+        self.presenter = presenter
+        super.init()
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        createWebViewWith configuration: WKWebViewConfiguration,
+        for navigationAction: WKNavigationAction,
+        windowFeatures: WKWindowFeatures
+    ) -> WKWebView? {
+        if navigationAction.targetFrame == nil,
+           let url = navigationAction.request.url,
+           url.host == allowedHost,
+           url.path.hasPrefix("/api/files/") || url.path.hasPrefix("/api/attachments/") {
+            presenter?.presentDocument(request: navigationAction.request)
+            return nil
+        }
+
+        return original?.webView?(
+            webView,
+            createWebViewWith: configuration,
+            for: navigationAction,
+            windowFeatures: windowFeatures
+        )
+    }
+
+    override func responds(to selector: Selector!) -> Bool {
+        super.responds(to: selector) || (original as? NSObject)?.responds(to: selector) == true
+    }
+
+    override func forwardingTarget(for selector: Selector!) -> Any? {
+        if let originalObject = original as? NSObject, originalObject.responds(to: selector) {
+            return originalObject
+        }
+        return super.forwardingTarget(for: selector)
+    }
+}
+
+private final class InternalDocumentViewController: UIViewController, WKNavigationDelegate {
+    private let request: URLRequest
+    private let webView: WKWebView
+    private let activityIndicator = UIActivityIndicatorView(style: .medium)
+
+    init(request: URLRequest) {
+        self.request = request
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .default()
+        configuration.preferences.isTextInteractionEnabled = true
+        webView = WKWebView(frame: .zero, configuration: configuration)
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        return nil
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Curriculum"
+        view.backgroundColor = .systemBackground
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            title: "Chiudi",
+            style: .done,
+            target: self,
+            action: #selector(close)
+        )
+
+        webView.navigationDelegate = self
+        webView.allowsBackForwardNavigationGestures = true
+        webView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(webView)
+
+        activityIndicator.hidesWhenStopped = true
+        activityIndicator.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(activityIndicator)
+
+        NSLayoutConstraint.activate([
+            webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+        ])
+
+        activityIndicator.startAnimating()
+        webView.load(request)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        activityIndicator.stopAnimating()
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        activityIndicator.stopAnimating()
+        showLoadError(error)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        activityIndicator.stopAnimating()
+        showLoadError(error)
+    }
+
+    @objc private func close() {
+        dismiss(animated: true)
+    }
+
+    private func showLoadError(_ error: Error) {
+        guard presentedViewController == nil else { return }
+        let alert = UIAlertController(
+            title: "Documento non disponibile",
+            message: error.localizedDescription,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 }
 
