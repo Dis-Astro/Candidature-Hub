@@ -29,7 +29,7 @@ La chiave di cifratura non deve essere cambiata senza prima decifrare/reinserire
 
 ## Acquisizione CV
 
-- Email: il worker salva gli allegati in `/data/inbox/mail` quando IMAP è abilitato nell'area Admin.
+- Email: il worker salva gli allegati PDF e scarica anche i collegamenti HTTPS diretti a file `.pdf` quando IMAP è abilitato nell'area Admin. Il CV viene collegato come documento principale della candidatura e la mail originale, con il link reso visibile, compare nella sezione **Allegati**. Download, dimensione e antivirus vengono verificati prima dell'acquisizione.
 - Manuale/scanner: copiare PDF in `/data/inbox/manual` o in qualsiasi sua sottocartella.
 - Il parser legge ricorsivamente entrambe le cartelle, estrae i dati e sposta i file in `/data/processed/AAAA-MM`.
 - ClamAV controlla curriculum e allegati prima che vengano acquisiti; gli elementi sospetti sono bloccati e visibili in **Importazioni**.

@@ -21,6 +21,8 @@ import subprocess
 import uuid
 import datetime
 import traceback
+import json
+import shutil
 from typing import Optional, Tuple, List
 
 import psycopg2
@@ -86,6 +88,7 @@ WATCH_DIR = os.environ.get("WATCH_DIR", "/data/inbox/manual")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 PROCESSED_DIR = os.environ.get("PROCESSED_DIR", os.path.join(WATCH_DIR, "processed"))
 ERROR_DIR = os.environ.get("ERROR_DIR", "/data/error")
+ATTACHMENTS_DIR = os.environ.get("ATTACHMENTS_DIR", "/data/attachments")
 OCR_LANG = os.environ.get("OCR_LANG", "ita")  # tesseract language
 
 # OCR_ENABLED viene letto dal DB SystemConfig se disponibile, altrimenti da env
@@ -501,6 +504,84 @@ def file_sha1(path: str) -> str:
     return h.hexdigest()
 
 
+def load_mail_context(pdf_path: str):
+    """Trova il contesto della mail che ha prodotto questo CV, se presente."""
+    directory = os.path.dirname(os.path.realpath(pdf_path))
+    filename = os.path.basename(pdf_path)
+    try:
+        manifests = [name for name in os.listdir(directory) if name.endswith(".mail.json")]
+    except OSError:
+        return None
+    for name in manifests:
+        manifest_path = os.path.join(directory, name)
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as stream:
+                context = json.load(stream)
+            if filename in context.get("cvFiles", []):
+                context["manifestPath"] = manifest_path
+                return context
+        except (OSError, ValueError, TypeError):
+            continue
+    return None
+
+
+def mail_file_is_ready(pdf_path: str) -> bool:
+    """Evita che il parser legga un CV mentre il worker sta completando la mail."""
+    directory = os.path.dirname(os.path.realpath(pdf_path))
+    filename = os.path.basename(pdf_path)
+    try:
+        lock_prefixes = [name[:-len(".mail-lock")] for name in os.listdir(directory) if name.endswith(".mail-lock")]
+    except OSError:
+        return True
+    return not any(filename.startswith(prefix + "__") or filename == prefix + ".pdf" for prefix in lock_prefixes)
+
+
+def attach_mail_document(cur, candidate_id: str, context) -> Optional[str]:
+    """Copia la mail originale negli allegati del candidato in modo idempotente."""
+    if not context:
+        return None
+    source = os.path.realpath(str(context.get("emailDocument") or ""))
+    if not source or not os.path.isfile(source):
+        return None
+
+    message_key = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(context.get("messageKey") or "mail"))[:60]
+    candidate_dir = os.path.join(ATTACHMENTS_DIR, candidate_id)
+    os.makedirs(candidate_dir, exist_ok=True)
+    destination = os.path.join(candidate_dir, f"email_originale_{message_key}.pdf")
+    temporary = destination + ".tmp"
+    shutil.copyfile(source, temporary)
+    os.replace(temporary, destination)
+
+    subject = re.sub(r"\s+", " ", str(context.get("subject") or "")).strip()
+    display_name = _sanitize_filename(f"Email originale - {subject or 'senza oggetto'}")
+    attachment_id = "att_" + hashlib.sha256(f"{candidate_id}|{message_key}".encode()).hexdigest()[:24]
+    cur.execute(
+        'INSERT INTO attachments (id,"createdAt",filename,"mimeType",size,type,path,"uploadedBy","candidateId") '
+        "VALUES (%s,now(),%s,'application/pdf',%s,'DOCUMENTO',%s,'system',%s) "
+        'ON CONFLICT (id) DO NOTHING',
+        (attachment_id, display_name, os.path.getsize(destination), destination, candidate_id),
+    )
+    return attachment_id
+
+
+def cleanup_mail_context(context):
+    """Rimuove i file di servizio quando tutti i CV della mail sono usciti dalla coda."""
+    if not context:
+        return
+    manifest = context.get("manifestPath")
+    if not manifest:
+        return
+    directory = os.path.dirname(manifest)
+    if any(os.path.exists(os.path.join(directory, name)) for name in context.get("cvFiles", [])):
+        return
+    for target in (context.get("emailDocument"), manifest):
+        try:
+            if target and os.path.isfile(target):
+                os.remove(target)
+        except OSError as error:
+            print(f"[WARN] pulizia contesto mail fallita: {_safe(str(error))}", file=sys.stderr)
+
+
 def move_to_processed(path: str) -> str:
     """Sposta il file in PROCESSED_DIR/AAAA-MM/filename.pdf. Ritorna nuovo path."""
     try:
@@ -633,11 +714,13 @@ def process_one_file(conn, path: str, ocr_enabled: bool = False, source: str = "
             update_import_job(job_id, "DUPLICATE", new_path, "File già acquisito", previous[1])
             return
 
+        mail_context = load_mail_context(path) if source == "EMAIL" else None
         text = extract_text_utf8(path, ocr_enabled)
         print(f"[PROC] estratto testo: {len(text)} caratteri", flush=True)
 
-        email = pick_email(text)
-        phone = pick_phone(text)
+        mail_text = str((mail_context or {}).get("bodyText") or "")
+        email = pick_email(text) or pick_email(mail_text)
+        phone = pick_phone(text) or pick_phone(mail_text)
 
         fn: Optional[str] = None
         ln: Optional[str] = None
@@ -685,6 +768,10 @@ def process_one_file(conn, path: str, ocr_enabled: bool = False, source: str = "
         cvf_id = insert_cv_file(cur, cand_id, path, st.st_size, sha1, source_key, text)
         print(f"[CVF] inserito cv_files id={cvf_id} size={st.st_size} sha1={sha1[:8]}...", flush=True)
 
+        attachment_id = attach_mail_document(cur, cand_id, mail_context)
+        if attachment_id:
+            print(f"[MAIL] mail originale collegata come allegato id={attachment_id}", flush=True)
+
         conn.commit()
         insert_import_event_newconn("SUCCESS", f"Inserito {os.path.basename(path)} sha1={sha1}", cand_id, cvf_id)
 
@@ -695,6 +782,7 @@ def process_one_file(conn, path: str, ocr_enabled: bool = False, source: str = "
                 cur.execute('UPDATE cv_files SET path=%s WHERE id=%s', (new_path, cvf_id))
                 conn.commit()
             update_import_job(job_id, "SUCCESS", new_path, "Candidato creato correttamente", cand_id)
+            cleanup_mail_context(mail_context)
         except Exception as e:
             print(f"[WARN] move_to_processed failed: {_safe(str(e))}", file=sys.stderr)
 
@@ -728,7 +816,7 @@ def process_one_file(conn, path: str, ocr_enabled: bool = False, source: str = "
 
 
 def main():
-    global WATCH_DIR, PROCESSED_DIR, ERROR_DIR
+    global WATCH_DIR, PROCESSED_DIR, ERROR_DIR, ATTACHMENTS_DIR
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL non impostata")
     print("[BOOT] Parser online; configurazione caricata dal database a ogni ciclo", flush=True)
@@ -743,6 +831,7 @@ def main():
             ensure_storage(config)
             PROCESSED_DIR = config["processedPath"]
             ERROR_DIR = config["errorPath"]
+            ATTACHMENTS_DIR = config["attachmentsPath"]
             cleanup_error_files(int(config.get("errorRetentionDays", 30)))
             input_dirs = [(config["mailInboxPath"], "EMAIL"), (config["manualInboxPath"], "MANUAL")]
             print(f"[CONFIG] input={input_dirs} processed={PROCESSED_DIR}", flush=True)
@@ -756,6 +845,7 @@ def main():
                     for root, _, filenames in os.walk(input_dir)
                     for filename in filenames
                     if filename.lower().endswith(".pdf")
+                    and (source != "EMAIL" or mail_file_is_ready(os.path.join(root, filename)))
                 })
             except FileNotFoundError:
                 print(f"[ERR] WATCH_DIR {WATCH_DIR} non esiste", file=sys.stderr, flush=True)
