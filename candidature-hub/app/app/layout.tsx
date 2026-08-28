@@ -5,6 +5,7 @@ import { getCurrentUser } from '../lib/auth'
 import { LogoutButton } from './LogoutButton'
 import { AppNavigation } from './AppNavigation'
 import { BrandMark } from './BrandMark'
+import { ConnectionStatus } from './ConnectionStatus'
 
 export const metadata: Metadata = {
   title: { default: 'Candidature Hub', template: '%s · Candidature Hub' },
@@ -29,6 +30,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="it">
       <body className="min-h-dvh antialiased">
+        <ConnectionStatus />
         {user ? <div className="app-shell">
           <AppNavigation role={user.role} name={user.name} email={user.email} />
           <header className="mobile-header safe-top">

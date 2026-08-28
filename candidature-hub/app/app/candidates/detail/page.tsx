@@ -18,7 +18,7 @@ type DetailPageProps = {
 };
 
 export default async function DetailPage({ searchParams }: DetailPageProps) {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await searchParams;
 
   if (!id) {
@@ -54,7 +54,12 @@ export default async function DetailPage({ searchParams }: DetailPageProps) {
 
   return (
     <div className="p-4">
-      <InterviewForm candidate={typedCandidate} lastInterview={lastInterview} />
+      <InterviewForm
+        candidate={typedCandidate}
+        lastInterview={lastInterview}
+        canEdit={user.role !== "VIEWER"}
+        canDelete={user.role === "ADMIN"}
+      />
     </div>
   );
 }

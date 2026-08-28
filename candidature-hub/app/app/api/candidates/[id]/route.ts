@@ -46,7 +46,7 @@ export async function DELETE(
   const client = await pool.connect();
   try {
     const [candidate, config] = await Promise.all([
-      prisma.candidate.findUnique({ where: { id }, select: { attachments: { select: { path: true } }, cvFiles: { select: { path: true } } } }),
+      prisma.candidate.findUnique({ where: { id }, select: { displayId: true, attachments: { select: { path: true } }, cvFiles: { select: { path: true } } } }),
       prisma.systemConfig.findUnique({ where: { id: "main" } }),
     ]);
     if (!candidate) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -71,6 +71,16 @@ export async function DELETE(
     if (del.rowCount === 0) {
       return NextResponse.json({ error: "not found" }, { status: 404 });
     }
+
+    await prisma.auditLog.create({
+      data: {
+        action: "CANDIDATE_DELETE",
+        entity: "Candidate",
+        entityId: id,
+        details: JSON.stringify({ displayId: candidate.displayId }),
+        userId: auth.id,
+      },
+    }).catch((auditError) => console.error("Audit CANDIDATE_DELETE failed:", auditError));
 
     return NextResponse.json({ ok: true, deletedId: id });
   } catch (e) {

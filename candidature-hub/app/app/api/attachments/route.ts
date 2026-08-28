@@ -91,7 +91,7 @@ function generateStorageName(originalName: string): string {
 }
 
 // Log audit
-async function logAudit(action: string, entity: string, entityId?: string, details?: string) {
+async function logAudit(action: string, entity: string, userId: string, entityId?: string, details?: string) {
   try {
     await prisma.auditLog.create({
       data: {
@@ -99,7 +99,7 @@ async function logAudit(action: string, entity: string, entityId?: string, detai
         entity,
         entityId: entityId || null,
         details: details || null,
-        userId: null, // "system" - no auth implementata
+        userId,
       },
     });
   } catch (e) {
@@ -202,6 +202,7 @@ export async function POST(req: NextRequest) {
     await logAudit(
       "ATTACHMENT_UPLOAD",
       "Attachment",
+      auth.id,
       attachment.id,
       JSON.stringify({ candidateId, filename: originalFilename, size: file.size, type: attachmentType })
     );

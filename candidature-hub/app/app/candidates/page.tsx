@@ -68,7 +68,7 @@ function ratingPillClass(r: number): string {
 }
 
 export default async function CandidatesPage({ searchParams }: PageProps) {
-  await requireUser();
+  const user = await requireUser();
   const search = await searchParams;
 
   const sp = new URLSearchParams();
@@ -272,12 +272,15 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
           <h1 className="page-title mt-2">Candidati</h1>
           <p className="page-subtitle">{rangeText} · trova, confronta e valuta i profili.</p>
         </div>
-        <div className="flex gap-2"><Link href="/api/candidates/export" prefetch={false} className="touch-button border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50">Esporta CSV</Link><Link
-          href="/candidates/new"
-          className="touch-button bg-teal-700 text-white shadow-sm transition hover:bg-teal-800"
-        >
-          <span className="text-lg">+</span> Nuovo candidato
-        </Link></div>
+        <div className="flex gap-2">
+          <Link href="/api/candidates/export" prefetch={false} className="touch-button border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50">Esporta CSV</Link>
+          {user.role !== "VIEWER" && <Link
+            href="/candidates/new"
+            className="touch-button bg-teal-700 text-white shadow-sm transition hover:bg-teal-800"
+          >
+            <span className="text-lg">+</span> Nuovo candidato
+          </Link>}
+        </div>
       </div>
 
       <FilterForm />

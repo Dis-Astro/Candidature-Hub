@@ -19,7 +19,7 @@ export default async function Page() {
     { href: '/candidates?interviewed=true', title: 'Colloqui effettuati', description: 'Rivedi valutazioni, note e decisioni.', count: withInterview, icon: '✓', tone: 'bg-[#e2e7de] text-[#5f6f58]' },
     { href: '/candidates?hasCv=true', title: 'Curriculum disponibili', description: 'Entra nei profili che hanno un CV allegato.', count: withCV, icon: '▤', tone: 'bg-[#eee4d8] text-[#80684d]' },
     { href: '/imports', title: 'Importazioni', description: importErrors ? 'Controlla gli elementi con errore.' : 'Gestisci acquisizioni e nuovi documenti.', count: importErrors, icon: '↓', tone: importErrors ? 'bg-red-100 text-red-700' : 'bg-[#e2e7de] text-[#5f6f58]' },
-    { href: '/candidates/new', title: 'Nuovo candidato', description: 'Inserisci manualmente una nuova candidatura.', icon: '＋', tone: 'bg-[#f1dfd8] text-[#9d4f39]' },
+    ...(user.role !== 'VIEWER' ? [{ href: '/candidates/new', title: 'Nuovo candidato', description: 'Inserisci manualmente una nuova candidatura.', icon: '＋', tone: 'bg-[#f1dfd8] text-[#9d4f39]' }] : []),
     ...(user.role === 'ADMIN' ? [{ href: '/admin/users', title: 'Utenti e accessi', description: 'Gestisci persone, ruoli e autorizzazioni.', icon: '◎', tone: 'bg-[#ece4ef] text-[#705d78]' }] : []),
   ]
 

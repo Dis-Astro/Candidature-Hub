@@ -11,7 +11,7 @@ import { requireUser } from "../../../lib/auth";
  */
 export async function updateCandidateAction(formData: FormData) {
   "use server";
-  await requireUser(["ADMIN", "RECRUITER"]);
+  const user = await requireUser(["ADMIN", "RECRUITER"]);
 
   const candidateId = String(formData.get("candidateId") ?? "");
 
@@ -41,6 +41,16 @@ export async function updateCandidateAction(formData: FormData) {
     },
   });
 
+  await prisma.auditLog.create({
+    data: {
+      action: "CANDIDATE_UPDATE",
+      entity: "Candidate",
+      entityId: candidate.id,
+      details: JSON.stringify({ fields: ["firstName", "lastName", "email", "phone", "mansione"] }),
+      userId: user.id,
+    },
+  });
+
   // dopo aver salvato, ricarichiamo la pagina del candidato
   redirect(`/candidates/${candidate.displayId}`);
 }
@@ -51,7 +61,7 @@ export async function updateCandidateAction(formData: FormData) {
  */
 export async function saveInterviewAction(formData: FormData) {
   "use server";
-  await requireUser(["ADMIN", "RECRUITER"]);
+  const user = await requireUser(["ADMIN", "RECRUITER"]);
 
   const candidateId = String(formData.get("candidateId") ?? "");
 
@@ -200,6 +210,15 @@ export async function saveInterviewAction(formData: FormData) {
       data: { candidateId, date: new Date(), ...interviewData },
     });
   }
+    await tx.auditLog.create({
+      data: {
+        action: createNewInterview ? "INTERVIEW_CREATE" : "INTERVIEW_UPDATE",
+        entity: "Candidate",
+        entityId: candidateId,
+        details: JSON.stringify({ rating, decision, roles: mansioneValues, profileVerified }),
+        userId: user.id,
+      },
+    });
     return updated;
   });
 

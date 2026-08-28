@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 import { authorizeRequest, isAuthError } from "@/lib/auth";
 import { NextRequest } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 type MergeBody = {
   targetId: string;   // può essere id interno (cv_...) oppure displayId numerico
@@ -118,6 +119,16 @@ export async function POST(req: NextRequest) {
     );
 
     await client.query("COMMIT");
+
+    await prisma.auditLog.create({
+      data: {
+        action: "CANDIDATE_MERGE",
+        entity: "Candidate",
+        entityId: canonicalTargetId,
+        details: JSON.stringify({ mergedFrom: uniqueSourceIds, deletedCandidates: delRes.rowCount }),
+        userId: auth.id,
+      },
+    }).catch((auditError) => console.error("Audit CANDIDATE_MERGE failed:", auditError));
 
     return NextResponse.json({
       ok: true,

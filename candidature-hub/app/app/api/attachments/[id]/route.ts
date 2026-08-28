@@ -6,7 +6,7 @@ import { authorizeRequest, isAuthError } from "../../../../lib/auth";
 import path from "node:path";
 
 // Log audit
-async function logAudit(action: string, entity: string, entityId?: string, details?: string) {
+async function logAudit(action: string, entity: string, userId: string, entityId?: string, details?: string) {
   try {
     await prisma.auditLog.create({
       data: {
@@ -14,7 +14,7 @@ async function logAudit(action: string, entity: string, entityId?: string, detai
         entity,
         entityId: entityId || null,
         details: details || null,
-        userId: null,
+        userId,
       },
     });
   } catch (e) {
@@ -105,6 +105,7 @@ export async function DELETE(
     await logAudit(
       "ATTACHMENT_DELETE",
       "Attachment",
+      auth.id,
       attachment.id,
       JSON.stringify({ 
         candidateId: attachment.candidateId, 

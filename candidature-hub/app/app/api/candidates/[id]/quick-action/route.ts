@@ -99,6 +99,16 @@ export async function POST(
       return NextResponse.json({ error: "Azione non valida" }, { status: 400 });
     }
 
+    await prisma.auditLog.create({
+      data: {
+        action: "CANDIDATE_QUICK_ACTION",
+        entity: "Candidate",
+        entityId: candidate.id,
+        details: JSON.stringify({ action, displayId: candidate.displayId }),
+        userId: auth.id,
+      },
+    });
+
     revalidatePath("/candidates");
     revalidatePath(`/candidates/${candidate.displayId}`);
 

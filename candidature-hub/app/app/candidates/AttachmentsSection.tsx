@@ -16,6 +16,7 @@ type Attachment = {
 
 type Props = {
   candidateId: string;
+  canEdit?: boolean;
 };
 
 type Toast = { type: "success" | "error"; message: string } | null;
@@ -47,7 +48,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function AttachmentsSection({ candidateId }: Props) {
+export function AttachmentsSection({ candidateId, canEdit = true }: Props) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -160,7 +161,7 @@ export function AttachmentsSection({ candidateId }: Props) {
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Allegati</h2>
-        <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 cursor-pointer disabled:opacity-50 transition-colors">
+        {canEdit && <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 cursor-pointer disabled:opacity-50 transition-colors">
           {uploading ? (
             "Caricamento..."
           ) : (
@@ -175,7 +176,7 @@ export function AttachmentsSection({ candidateId }: Props) {
               />
             </>
           )}
-        </label>
+        </label>}
       </div>
 
       <p className="text-xs text-slate-500">
@@ -248,13 +249,13 @@ export function AttachmentsSection({ candidateId }: Props) {
                 </a>
 
                 {/* Delete */}
-                <button
+                {canEdit && <button
                   onClick={() => handleDelete(att.id, att.filename)}
                   className="p-2 rounded-lg hover:bg-red-100 text-red-600 transition-colors"
                   title="Elimina"
                 >
                   🗑️
-                </button>
+                </button>}
               </div>
             </div>
           ))}

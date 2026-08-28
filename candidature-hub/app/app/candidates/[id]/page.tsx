@@ -24,7 +24,7 @@ function normalizeStr(v: string | string[] | undefined): string | undefined {
 }
 
 export default async function DetailPage({ params, searchParams }: PageProps) {
-  await requireUser();
+  const user = await requireUser();
   const { id: idParam } = await params;
   const search = await searchParams;
 
@@ -103,6 +103,8 @@ export default async function DetailPage({ params, searchParams }: PageProps) {
       <InterviewForm
         candidate={candidate as Candidate & { cvFiles: CvFile[]; interviews: Interview[] }}
         lastInterview={latestInterview ?? null}
+        canEdit={user.role !== "VIEWER"}
+        canDelete={user.role === "ADMIN"}
       />
     </div>
   );

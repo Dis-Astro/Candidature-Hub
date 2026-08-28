@@ -49,10 +49,12 @@ export function AppNavigation({ role, name, email }: { role: Role; name?: string
         <span className="app-brand-copy"><strong>Candidature</strong><small>Hub</small></span>
       </Link>
 
-      <Link href="/candidates/new" className="app-new-candidate">
-        <Icon name="plus" />
-        <span>Nuovo candidato</span>
-      </Link>
+      {role !== "VIEWER" && (
+        <Link href="/candidates/new" className="app-new-candidate">
+          <Icon name="plus" />
+          <span>Nuovo candidato</span>
+        </Link>
+      )}
 
       <nav className="app-sidebar-links">
         {visibleLinks.map(link => {
@@ -79,7 +81,7 @@ export function AppNavigation({ role, name, email }: { role: Role; name?: string
           <span>{link.label === "Importazioni" ? "Import" : link.label === "Panoramica" ? "Home" : link.label}</span>
         </Link>;
       })}
-      {role !== "ADMIN" && <Link href="/candidates/new" className={`mobile-dock-item ${pathname === "/candidates/new" ? "is-active" : ""}`}><Icon name="plus" className="h-5 w-5" /><span>Nuovo</span></Link>}
+      {role === "RECRUITER" && <Link href="/candidates/new" className={`mobile-dock-item ${pathname === "/candidates/new" ? "is-active" : ""}`}><Icon name="plus" className="h-5 w-5" /><span>Nuovo</span></Link>}
     </nav>
   </>;
 }

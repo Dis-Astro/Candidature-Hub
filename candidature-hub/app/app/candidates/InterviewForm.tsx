@@ -18,6 +18,8 @@ type Props = {
   candidate: CandidateWithRelations;
   lastInterview: Interview | null;
   previousInterviews?: Interview[];
+  canEdit: boolean;
+  canDelete: boolean;
 };
 
 const MANSIONE_OPTIONS = [
@@ -27,7 +29,7 @@ const MANSIONE_OPTIONS = [
 
 const PATENTE_OPTIONS = ["A", "B", "C", "D", "E", "CQC"];
 
-export function InterviewForm({ candidate, lastInterview }: Props) {
+export function InterviewForm({ candidate, lastInterview, canEdit, canDelete }: Props) {
   const router = useRouter();
   const [firstName, setFirstName] = useState(candidate.firstName);
   const [lastName, setLastName] = useState(candidate.lastName);
@@ -158,19 +160,19 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="block text-[11px] font-medium text-slate-500 uppercase tracking-wide">Nome</label>
-              <input className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" value={firstName} onChange={e => setFirstName(e.target.value)} />
+              <input disabled={!canEdit} className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100" value={firstName} onChange={e => setFirstName(e.target.value)} />
             </div>
             <div>
               <label className="block text-[11px] font-medium text-slate-500 uppercase tracking-wide">Cognome</label>
-              <input className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" value={lastName} onChange={e => setLastName(e.target.value)} />
+              <input disabled={!canEdit} className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100" value={lastName} onChange={e => setLastName(e.target.value)} />
             </div>
             <div>
               <label className="block text-[11px] font-medium text-slate-500 uppercase tracking-wide">Email</label>
-              <input type="email" className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" value={email} onChange={e => setEmail(e.target.value)} />
+              <input disabled={!canEdit} type="email" className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100" value={email} onChange={e => setEmail(e.target.value)} />
             </div>
             <div>
               <label className="block text-[11px] font-medium text-slate-500 uppercase tracking-wide">Telefono</label>
-              <input className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" value={phone} onChange={e => setPhone(e.target.value)} />
+              <input disabled={!canEdit} className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100" value={phone} onChange={e => setPhone(e.target.value)} />
             </div>
           </div>
 
@@ -188,7 +190,7 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
               ) : <span className="text-slate-400">Nessun CV</span>}
             </div>
             <form action={handleUpdateAnagrafica}>
-              <button type="submit" disabled={isSavingAnagrafica} className="px-3 py-1.5 text-xs font-medium rounded bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-50">
+              <button type="submit" disabled={isSavingAnagrafica || !canEdit} className="px-3 py-1.5 text-xs font-medium rounded bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-50">
                 {isSavingAnagrafica ? "..." : "Salva anagrafica"}
               </button>
             </form>
@@ -206,17 +208,19 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
             <div className="flex justify-between"><span className="text-slate-500">Rating</span><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${ratingColor}`}>{rating || "–"}/10</span></div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-200 space-y-2">
+          {(canEdit || canDelete) && <div className="mt-4 pt-3 border-t border-slate-200 space-y-2">
+            {canEdit && (
             <div className="flex gap-2">
               <input type="text" placeholder="ID target (cv_...)" className="flex-1 text-[11px] rounded border px-2 py-1" value={mergeTargetId} onChange={e => setMergeTargetId(e.target.value)} />
               <button onClick={handleMerge} disabled={isMerging || !mergeTargetId.trim()} className="px-2 py-1 text-[11px] rounded bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50">
                 Unisci
               </button>
             </div>
-            <button onClick={handleDelete} disabled={isDeleting} className="w-full px-2 py-1.5 text-[11px] rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">
+            )}
+            {canDelete && <button onClick={handleDelete} disabled={isDeleting} className="w-full px-2 py-1.5 text-[11px] rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">
               {isDeleting ? "..." : "Elimina candidato"}
-            </button>
-          </div>
+            </button>}
+          </div>}
         </section>
       </div>
 
@@ -228,11 +232,12 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
           discarded={candidate.discarded}
           rating={candidate.rating}
           decision={lastInterview?.decision ?? null}
+          canEdit={canEdit}
         />
       </section>
 
       {/* === ALLEGATI === */}
-      <AttachmentsSection candidateId={candidate.id} />
+      <AttachmentsSection candidateId={candidate.id} canEdit={canEdit} />
 
       {/* === ULTIMO COLLOQUIO (se esiste) === */}
       {lastInterview && (
@@ -261,9 +266,9 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-slate-800">Colloquio</h2>
           <div className="flex items-center gap-2">
-            <input type="number" min={0} max={10} className="w-14 rounded border px-2 py-1 text-sm text-center" value={rating} onChange={e => { const v = e.target.value; setRating(v === "" ? "" : Math.max(0, Math.min(10, Number(v)))); }} />
+            <input disabled={!canEdit} type="number" min={0} max={10} className="w-14 rounded border px-2 py-1 text-sm text-center disabled:bg-slate-100" value={rating} onChange={e => { const v = e.target.value; setRating(v === "" ? "" : Math.max(0, Math.min(10, Number(v)))); }} />
             <span className={`px-3 py-1 rounded-full text-sm font-bold ${ratingColor}`}>{rating || "–"}/10</span>
-            <button type="button" onClick={() => setProfileVerified(value => !value)} className={`min-h-11 rounded-lg px-4 text-sm font-semibold ${profileVerified ? "bg-amber-500 text-white" : "bg-slate-200 text-slate-700"}`} title="Applica il timbro di certificazione alla candidatura">
+            <button disabled={!canEdit} type="button" onClick={() => setProfileVerified(value => !value)} className={`min-h-11 rounded-lg px-4 text-sm font-semibold disabled:opacity-50 ${profileVerified ? "bg-amber-500 text-white" : "bg-slate-200 text-slate-700"}`} title="Applica il timbro di certificazione alla candidatura">
               {profileVerified ? "🏆 Certificato" : "Certifica"}
             </button>
           </div>
@@ -273,6 +278,7 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
           <input type="hidden" name="candidateId" value={candidate.id} />
           <input type="hidden" name="rating" value={rating === "" ? "" : String(rating)} />
           <input type="hidden" name="profileVerified" value={String(profileVerified)} />
+          <fieldset disabled={!canEdit} className="space-y-4 disabled:opacity-75">
 
           {/* Mansioni */}
           <div>
@@ -386,6 +392,7 @@ export function InterviewForm({ candidate, lastInterview }: Props) {
             </button>
             <button type="submit" name="saveMode" value="new" disabled={isSavingInterview} className="px-4 py-2 rounded-lg border border-teal-700 text-teal-800 text-sm font-medium hover:bg-teal-50 disabled:opacity-50">Salva come nuovo colloquio</button>
           </div>
+          </fieldset>
         </form>
       </section>
     </div>

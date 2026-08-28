@@ -10,6 +10,7 @@ type Props = {
   discarded: boolean;
   rating: number | null;
   decision: string | null;
+  canEdit?: boolean;
 };
 
 function getStatus(discarded: boolean, rating: number | null, decision: string | null): CandidateStatus {
@@ -26,7 +27,7 @@ const STATUS_CONFIG: Record<CandidateStatus, { label: string; icon: string; clas
   ASSUMERE: { label: "Assumere", icon: "★", class: "bg-amber-100 text-amber-800 border-amber-300" },
 };
 
-export function QuickActions({ candidateId, discarded, rating, decision }: Props) {
+export function QuickActions({ candidateId, discarded, rating, decision, canEdit = true }: Props) {
   const router = useRouter();
   const [acting, setActing] = useState(false);
   const [localDiscarded, setLocalDiscarded] = useState(discarded);
@@ -103,7 +104,7 @@ export function QuickActions({ candidateId, discarded, rating, decision }: Props
       </div>
 
       {/* Pulsanti compatti */}
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      {canEdit && <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         <button
           onClick={() => handleAction("discard")}
           disabled={acting || currentStatus === "SCARTATO"}
@@ -151,7 +152,7 @@ export function QuickActions({ candidateId, discarded, rating, decision }: Props
         >
           ★ Assumere
         </button>
-      </div>
+      </div>}
     </div>
   );
 }

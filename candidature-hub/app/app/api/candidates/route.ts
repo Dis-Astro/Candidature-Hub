@@ -44,6 +44,16 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    await prisma.auditLog.create({
+      data: {
+        action: "CANDIDATE_CREATE",
+        entity: "Candidate",
+        entityId: candidate.id,
+        details: JSON.stringify({ displayId: candidate.displayId, source: "manual" }),
+        userId: auth.id,
+      },
+    });
+
     revalidatePath("/candidates");
 
     return NextResponse.json({
