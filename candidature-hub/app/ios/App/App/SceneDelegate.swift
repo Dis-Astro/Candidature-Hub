@@ -54,6 +54,7 @@ private final class ConfigurableBridgeViewController: CAPBridgeViewController {
     private let configuredServerURL: URL?
     private var internalLinkDelegate: InternalLinkUIDelegate?
     private var serverSettingsMessageHandler: ServerSettingsMessageHandler?
+    private var nativeEnhancementsSource: String?
 
     init(serverURL: URL?) {
         configuredServerURL = serverURL
@@ -83,17 +84,94 @@ private final class ConfigurableBridgeViewController: CAPBridgeViewController {
         let handler = ServerSettingsMessageHandler(owner: self)
         serverSettingsMessageHandler = handler
         configuration.userContentController.add(handler, name: "serverSettings")
-        configuration.userContentController.addUserScript(WKUserScript(
+        let nativeEnhancements = WKUserScript(
             source: """
-            document.addEventListener('pointerdown', function (event) {
-              if (event.pointerType !== 'pen') return;
-              const field = event.target.closest('input, textarea, [contenteditable="true"]');
-              if (field) field.focus({ preventScroll: true });
-            }, true);
+            (() => {
+              document.addEventListener('pointerdown', function (event) {
+                if (event.pointerType !== 'pen') return;
+                const field = event.target.closest('input, textarea, [contenteditable="true"]');
+                if (field) field.focus({ preventScroll: true });
+              }, true);
+
+              function enhanceCandidateRows() {
+                document.querySelectorAll('table tbody tr').forEach(function (row) {
+                  if (row.dataset.nativeCandidateNavigation === '1') return;
+                  const link = row.querySelector('a[href^="/candidates/"]');
+                  if (!link) return;
+                  row.dataset.nativeCandidateNavigation = '1';
+                  row.setAttribute('role', 'link');
+                  row.setAttribute('tabindex', '0');
+                  row.style.cursor = 'pointer';
+                  const open = function () { window.location.assign(link.href); };
+                  row.addEventListener('click', function (event) {
+                    if (event.target.closest('button, input, select, textarea')) return;
+                    event.preventDefault();
+                    open();
+                  });
+                  row.addEventListener('keydown', function (event) {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    open();
+                  });
+                });
+              }
+
+              function serverIcon() {
+                return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><rect x="4" y="3" width="16" height="7" rx="2"></rect><rect x="4" y="14" width="16" height="7" rx="2"></rect><path d="M8 6.5h.01M8 17.5h.01M12 6.5h5M12 17.5h5"></path></svg>';
+              }
+
+              function ensureServerMenu() {
+                const navigation = document.querySelector('.app-sidebar-links');
+                if (!navigation) return;
+                const existing = Array.from(navigation.querySelectorAll('button')).find(function (item) {
+                  return item.textContent.trim() === 'Server iPad';
+                });
+                if (existing) return;
+
+                const systemLink = Array.from(navigation.querySelectorAll('a')).find(function (item) {
+                  return item.textContent.trim() === 'Sistema';
+                });
+                const group = document.createElement('div');
+                group.id = 'native-ipad-server-menu';
+                group.style.display = 'contents';
+
+                if (!systemLink) {
+                  const heading = document.createElement('p');
+                  heading.textContent = 'Sistema';
+                  heading.style.cssText = 'margin:1rem .75rem .2rem;font-size:.68rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#718096';
+                  group.appendChild(heading);
+                }
+
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'app-sidebar-link w-full text-left';
+                button.innerHTML = serverIcon() + '<span>Server iPad</span>';
+                button.addEventListener('click', function () {
+                  window.webkit?.messageHandlers?.serverSettings?.postMessage({ source: 'native-menu' });
+                });
+                group.appendChild(button);
+
+                if (systemLink) systemLink.insertAdjacentElement('afterend', group);
+                else navigation.appendChild(group);
+              }
+
+              function installEnhancements() {
+                enhanceCandidateRows();
+                ensureServerMenu();
+              }
+
+              installEnhancements();
+              new MutationObserver(installEnhancements).observe(document.documentElement, {
+                childList: true,
+                subtree: true,
+              });
+            })();
             """,
             injectionTime: .atDocumentEnd,
             forMainFrameOnly: false
-        ))
+        )
+        nativeEnhancementsSource = nativeEnhancements.source
+        configuration.userContentController.addUserScript(nativeEnhancements)
         return configuration
     }
 
@@ -108,6 +186,10 @@ private final class ConfigurableBridgeViewController: CAPBridgeViewController {
         internalLinkDelegate = delegate
         webView.uiDelegate = delegate
         webView.allowsBackForwardNavigationGestures = true
+        if let serverSettingsMessageHandler {
+            webView.configuration.userContentController.removeScriptMessageHandler(forName: "serverSettings")
+            webView.configuration.userContentController.add(serverSettingsMessageHandler, name: "serverSettings")
+        }
         // Il dito e il trackpad scorrono; la Pencil resta disponibile a Scribble nei campi.
         webView.scrollView.panGestureRecognizer.allowedTouchTypes = [
             NSNumber(value: UITouch.TouchType.direct.rawValue),
@@ -115,6 +197,20 @@ private final class ConfigurableBridgeViewController: CAPBridgeViewController {
         ]
         webView.scrollView.delaysContentTouches = false
         webView.scrollView.keyboardDismissMode = .interactive
+        runNativeEnhancements(in: webView)
+        for delay in [0.5, 1.5, 3.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak webView] in
+                guard let self, let webView else { return }
+                self.runNativeEnhancements(in: webView)
+            }
+        }
+    }
+
+    private func runNativeEnhancements(in webView: WKWebView) {
+        guard let nativeEnhancementsSource else { return }
+        webView.evaluateJavaScript(nativeEnhancementsSource) { _, error in
+            if let error { NSLog("Candidature Hub native enhancements: %@", error.localizedDescription) }
+        }
     }
 
     fileprivate func presentDocument(request: URLRequest) {

@@ -33,6 +33,7 @@ export function CandidateTableRow({
     <tr
       role="link"
       tabIndex={0}
+      data-candidate-href={href}
       aria-label={label}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
