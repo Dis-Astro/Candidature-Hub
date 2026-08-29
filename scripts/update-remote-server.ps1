@@ -100,7 +100,10 @@ Start-Transcript -LiteralPath $logPath -Force | Out-Null
 try {
     Write-Host "Connessione a $Server come $RemoteUser" -ForegroundColor Cyan
     Write-Host "Inserisci la password del server quando richiesta." -ForegroundColor Yellow
-    & ssh -tt -o StrictHostKeyChecking=yes -l $RemoteUser $Server "powershell.exe -NoProfile -EncodedCommand $encoded"
+    # Il server Windows consente una shell interattiva ma può rifiutare le
+    # richieste SSH "exec". Inviamo quindi il comando alla shell autorizzata.
+    $shellInput = "powershell.exe -NoProfile -EncodedCommand $encoded`r`nexit`r`n"
+    $shellInput | & ssh -tt -o StrictHostKeyChecking=yes -l $RemoteUser $Server
     $exitCode = $LASTEXITCODE
 } catch {
     Write-Host $_.Exception.Message -ForegroundColor Red
