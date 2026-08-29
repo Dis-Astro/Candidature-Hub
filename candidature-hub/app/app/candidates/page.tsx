@@ -7,6 +7,7 @@ import { prisma } from "../../lib/prisma";
 import { buildUrl, parsePositiveInt } from "../../lib/url";
 import { FilterForm } from "./FilterForm";
 import { PageSizeSelector } from "./PageSizeSelector";
+import { CandidateTableRow } from "./CandidateTableRow";
 import { requireUser } from "../../lib/auth";
 
 type PageProps = {
@@ -355,14 +356,13 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
               const candidateHref = `/candidates/${c.displayId}`;
 
               return (
-                <tr key={c.id} className="cursor-pointer transition-colors hover:bg-slate-50/80 focus-within:bg-slate-50">
+                <CandidateTableRow
+                  key={c.id}
+                  href={candidateHref}
+                  label={`Apri la scheda di ${c.firstName} ${c.lastName}`}
+                >
                   {/* ID (DORATO con 🏆 se certificato) */}
-                  <td className="p-0">
-                    <Link
-                      href={candidateHref}
-                      className="block px-4 py-3"
-                      aria-label={`Apri la scheda di ${c.firstName} ${c.lastName}`}
-                    >
+                  <td className="px-4 py-3">
                       <span
                         className={certified
                           ? "inline-flex items-center gap-1 rounded-lg border border-amber-400 bg-gradient-to-r from-amber-200 to-yellow-300 px-2.5 py-1 text-xs font-bold text-amber-900 shadow-sm"
@@ -372,51 +372,46 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
                         {certified && <span>🏆</span>}
                         {c.displayId}
                       </span>
-                    </Link>
                   </td>
 
                   {/* Colloquio */}
-                  <td className="p-0">
-                    <Link href={candidateHref} className="block px-4 py-3">
+                  <td className="px-4 py-3">
                       {c.interviewed ? (
                         <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-green-100 text-sm text-green-700" title="Colloquio fatto">✓</span>
                       ) : (
                         <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-sm text-slate-400" title="No colloquio">–</span>
                       )}
-                    </Link>
                   </td>
 
-                  <td className="p-0"><Link href={candidateHref} className="block px-4 py-3 font-medium text-slate-800">{c.lastName}</Link></td>
-                  <td className="p-0"><Link href={candidateHref} className="block px-4 py-3 text-slate-600">{c.firstName}</Link></td>
-                  <td className="p-0"><Link href={candidateHref} className="block px-4 py-3 text-slate-600">{formatMansione(c.mansione) || "—"}</Link></td>
+                  <td className="px-4 py-3 font-medium text-slate-800">{c.lastName}</td>
+                  <td className="px-4 py-3 text-slate-600">{c.firstName}</td>
+                  <td className="px-4 py-3 text-slate-600">{formatMansione(c.mansione) || "—"}</td>
 
-                  <td className="p-0">
-                    <Link href={candidateHref} className="block px-4 py-3">
+                  <td className="px-4 py-3">
                       {typeof c.rating === "number" ? <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${ratingPillClass(c.rating)}`}>{c.rating}</span> : "—"}
-                    </Link>
                   </td>
 
-                  <td className="p-0 text-xs text-slate-500">
-                    <Link href={candidateHref} className="block px-4 py-3">{new Date(c.updatedAt).toLocaleString("it-IT", {
+                  <td className="px-4 py-3 text-xs text-slate-500">
+                    {new Date(c.updatedAt).toLocaleString("it-IT", {
                         day: "2-digit", month: "2-digit", year: "2-digit",
                         timeZone: "Europe/Rome",
-                      })}</Link>
+                      })}
                   </td>
 
-                  <td className="p-0">
-                    <Link href={candidateHref} className="block px-4 py-3"><span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{c._count.importEvents}</span></Link>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{c._count.importEvents}</span>
                   </td>
 
                   {/* Stato */}
-                  <td className="p-0">
-                    <Link href={candidateHref} className="block px-4 py-3"><span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs ${stateBadge.class}`} title={stateBadge.label}>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs ${stateBadge.class}`} title={stateBadge.label}>
                         {state === "SCARTATO" && "✕ "}
                         {state === "ASSUMERE" && "★ "}
                         {state === "SHORTLIST" && "✓ "}
                         {stateBadge.label}
-                      </span></Link>
+                      </span>
                   </td>
-                </tr>
+                </CandidateTableRow>
               );
             })}
 

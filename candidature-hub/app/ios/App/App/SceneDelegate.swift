@@ -280,11 +280,31 @@ private final class ServerContainerViewController: UIViewController {
         installBridge(for: ServerPreferences.savedURL)
         configureActivityIndicator()
 
-        if ServerPreferences.savedURL == nil {
+        if let savedURL = ServerPreferences.savedURL {
+            verifySavedServer(savedURL)
+        } else {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 self?.showServerSettings()
             }
         }
+    }
+
+    private func verifySavedServer(_ url: URL) {
+        activityIndicator.startAnimating()
+        var request = URLRequest(url: url.appendingPathComponent("login"))
+        request.timeoutInterval = 6
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+
+        URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.activityIndicator.stopAnimating()
+                let status = (response as? HTTPURLResponse)?.statusCode
+                guard error != nil || status == nil || !(200...499).contains(status!) else { return }
+                guard self.presentedViewController == nil else { return }
+                self.showConnectionError(for: url, error: error)
+            }
+        }.resume()
     }
 
     private func installBridge(for serverURL: URL?) {

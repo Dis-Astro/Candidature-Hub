@@ -5,12 +5,9 @@ import { usePathname } from "next/navigation";
 import type { Role } from "@prisma/client";
 import { LogoutButton } from "./LogoutButton";
 import { BrandMark } from "./BrandMark";
+import { openNativeServerSettings } from "./NativeServerSettings";
 
 type IconName = "home" | "people" | "imports" | "guide" | "settings" | "server" | "accounts" | "plus";
-
-type NativeServerWindow = Window & {
-  webkit?: { messageHandlers?: { serverSettings?: { postMessage: (payload: object) => void } } };
-};
 
 function Icon({ name, className = "h-6 w-6" }: { name: IconName; className?: string }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -47,12 +44,6 @@ export function AppNavigation({ role, name, email }: { role: Role; name?: string
     ? visibleLinks.filter(link => ["/", "/candidates", "/imports", "/admin"].includes(link.href))
     : visibleLinks.filter(link => link.href !== "/docs").slice(0, 3);
 
-  function openServerSettings() {
-    const handler = (window as NativeServerWindow).webkit?.messageHandlers?.serverSettings;
-    if (handler) handler.postMessage({ source: "menu" });
-    else window.alert("Questa impostazione è disponibile nell’app installata sull’iPad.");
-  }
-
   return <>
     <aside className="app-sidebar" aria-label="Navigazione principale">
       <Link href="/" className="app-brand" aria-label="Candidature Hub">
@@ -76,7 +67,7 @@ export function AppNavigation({ role, name, email }: { role: Role; name?: string
           </Link>;
         })}
         {role === "ADMIN" && (
-          <button type="button" onClick={openServerSettings} className="app-sidebar-link w-full text-left">
+          <button type="button" onClick={() => openNativeServerSettings("menu")} className="app-sidebar-link w-full pl-10 text-left">
             <Icon name="server" />
             <span>Server iPad</span>
           </button>

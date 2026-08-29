@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { NativeServerSettingsCard } from "../NativeServerSettings";
 
 type Config = {
   storageMode: string;
@@ -239,6 +240,8 @@ export default function AdminPage() {
         <h1 className="page-title mt-2">Gestione sistema</h1>
         <p className="page-subtitle">Configura archivio, casella email, parser, backup e accessi amministrativi.</p>
       </header>
+
+      <NativeServerSettingsCard />
 
       {message && (
         <div
