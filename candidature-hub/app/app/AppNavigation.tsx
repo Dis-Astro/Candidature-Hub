@@ -6,7 +6,11 @@ import type { Role } from "@prisma/client";
 import { LogoutButton } from "./LogoutButton";
 import { BrandMark } from "./BrandMark";
 
-type IconName = "home" | "people" | "imports" | "guide" | "settings" | "accounts" | "plus";
+type IconName = "home" | "people" | "imports" | "guide" | "settings" | "server" | "accounts" | "plus";
+
+type NativeServerWindow = Window & {
+  webkit?: { messageHandlers?: { serverSettings?: { postMessage: (payload: object) => void } } };
+};
 
 function Icon({ name, className = "h-6 w-6" }: { name: IconName; className?: string }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -15,6 +19,7 @@ function Icon({ name, className = "h-6 w-6" }: { name: IconName; className?: str
     imports: <><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></>,
     guide: <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" /></>,
     settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1 1.55V21h-4v-.08A1.7 1.7 0 0 0 9 19.37a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.63 15a1.7 1.7 0 0 0-1.55-1H3v-4h.08A1.7 1.7 0 0 0 4.63 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.63a1.7 1.7 0 0 0 1-1.55V3h4v.08a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.37 9a1.7 1.7 0 0 0 1.55 1H21v4h-.08a1.7 1.7 0 0 0-1.52 1Z" /></>,
+    server: <><rect x="4" y="3" width="16" height="7" rx="2" /><rect x="4" y="14" width="16" height="7" rx="2" /><path d="M8 6.5h.01M8 17.5h.01M12 6.5h5M12 17.5h5" /></>,
     accounts: <><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><circle cx="17.5" cy="14.5" r="2" /><path d="m17.5 11.2.4-1.2M17.5 17.8l.4 1.2M14.2 14.5l-1.2-.4M20.8 14.5l1.2-.4M15.2 12.2l-.8-.9M19.8 16.8l.8.9M19.8 12.2l.8-.9" /></>,
     plus: <><path d="M12 5v14M5 12h14" /></>,
   };
@@ -42,6 +47,12 @@ export function AppNavigation({ role, name, email }: { role: Role; name?: string
     ? visibleLinks.filter(link => ["/", "/candidates", "/imports", "/admin"].includes(link.href))
     : visibleLinks.filter(link => link.href !== "/docs").slice(0, 3);
 
+  function openServerSettings() {
+    const handler = (window as NativeServerWindow).webkit?.messageHandlers?.serverSettings;
+    if (handler) handler.postMessage({ source: "menu" });
+    else window.alert("Questa impostazione è disponibile nell’app installata sull’iPad.");
+  }
+
   return <>
     <aside className="app-sidebar" aria-label="Navigazione principale">
       <Link href="/" className="app-brand" aria-label="Candidature Hub">
@@ -64,6 +75,12 @@ export function AppNavigation({ role, name, email }: { role: Role; name?: string
             <span>{link.label}</span>
           </Link>;
         })}
+        {role === "ADMIN" && (
+          <button type="button" onClick={openServerSettings} className="app-sidebar-link w-full text-left">
+            <Icon name="server" />
+            <span>Server iPad</span>
+          </button>
+        )}
       </nav>
 
       <div className="app-user-card">

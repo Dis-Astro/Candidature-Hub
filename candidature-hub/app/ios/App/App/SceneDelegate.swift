@@ -53,6 +53,7 @@ enum ServerPreferences {
 private final class ConfigurableBridgeViewController: CAPBridgeViewController {
     private let configuredServerURL: URL?
     private var internalLinkDelegate: InternalLinkUIDelegate?
+    private var serverSettingsMessageHandler: ServerSettingsMessageHandler?
 
     init(serverURL: URL?) {
         configuredServerURL = serverURL
@@ -79,6 +80,20 @@ private final class ConfigurableBridgeViewController: CAPBridgeViewController {
         let configuration = super.webViewConfiguration(for: instanceConfiguration)
         configuration.websiteDataStore = .default()
         configuration.preferences.isTextInteractionEnabled = true
+        let handler = ServerSettingsMessageHandler(owner: self)
+        serverSettingsMessageHandler = handler
+        configuration.userContentController.add(handler, name: "serverSettings")
+        configuration.userContentController.addUserScript(WKUserScript(
+            source: """
+            document.addEventListener('pointerdown', function (event) {
+              if (event.pointerType !== 'pen') return;
+              const field = event.target.closest('input, textarea, [contenteditable="true"]');
+              if (field) field.focus({ preventScroll: true });
+            }, true);
+            """,
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: false
+        ))
         return configuration
     }
 
@@ -93,6 +108,13 @@ private final class ConfigurableBridgeViewController: CAPBridgeViewController {
         internalLinkDelegate = delegate
         webView.uiDelegate = delegate
         webView.allowsBackForwardNavigationGestures = true
+        // Il dito e il trackpad scorrono; la Pencil resta disponibile a Scribble nei campi.
+        webView.scrollView.panGestureRecognizer.allowedTouchTypes = [
+            NSNumber(value: UITouch.TouchType.direct.rawValue),
+            NSNumber(value: UITouch.TouchType.indirectPointer.rawValue),
+        ]
+        webView.scrollView.delaysContentTouches = false
+        webView.scrollView.keyboardDismissMode = .interactive
     }
 
     fileprivate func presentDocument(request: URLRequest) {
@@ -101,6 +123,23 @@ private final class ConfigurableBridgeViewController: CAPBridgeViewController {
         let navigation = UINavigationController(rootViewController: document)
         navigation.modalPresentationStyle = .fullScreen
         present(navigation, animated: true)
+    }
+
+    fileprivate func presentServerSettings() {
+        (parent as? ServerContainerViewController)?.showServerSettings()
+    }
+}
+
+private final class ServerSettingsMessageHandler: NSObject, WKScriptMessageHandler {
+    private weak var owner: ConfigurableBridgeViewController?
+
+    init(owner: ConfigurableBridgeViewController) {
+        self.owner = owner
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.name == "serverSettings" else { return }
+        DispatchQueue.main.async { [weak self] in self?.owner?.presentServerSettings() }
     }
 }
 
@@ -233,20 +272,13 @@ private final class InternalDocumentViewController: UIViewController, WKNavigati
 
 private final class ServerContainerViewController: UIViewController {
     private var bridgeViewController: ConfigurableBridgeViewController?
-    private let settingsButton = UIButton(type: .system)
-    private let offlineButton = UIButton(type: .system)
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
-    private var syncTimer: Timer?
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = UIColor(red: 0.961, green: 0.949, blue: 0.925, alpha: 1)
         installBridge(for: ServerPreferences.savedURL)
-        configureSettingsButton()
-        configureOfflineButton()
-        updateOfflineButton()
-        syncTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in self?.attemptOfflineSync() }
-        attemptOfflineSync()
+        configureActivityIndicator()
 
         if ServerPreferences.savedURL == nil {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
@@ -254,8 +286,6 @@ private final class ServerContainerViewController: UIViewController {
             }
         }
     }
-
-    deinit { syncTimer?.invalidate() }
 
     private func installBridge(for serverURL: URL?) {
         if let current = bridgeViewController {
@@ -278,88 +308,18 @@ private final class ServerContainerViewController: UIViewController {
         bridgeViewController = bridge
     }
 
-    private func configureSettingsButton() {
-        var configuration = UIButton.Configuration.filled()
-        configuration.title = "Server"
-        configuration.image = UIImage(systemName: "gearshape.fill")
-        configuration.imagePadding = 7
-        configuration.baseForegroundColor = UIColor(red: 0.251, green: 0.325, blue: 0.416, alpha: 1)
-        configuration.baseBackgroundColor = UIColor(white: 1, alpha: 0.96)
-        configuration.cornerStyle = .capsule
-        configuration.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
-        settingsButton.configuration = configuration
-        settingsButton.layer.shadowColor = UIColor.black.cgColor
-        settingsButton.layer.shadowOpacity = 0.16
-        settingsButton.layer.shadowRadius = 10
-        settingsButton.layer.shadowOffset = CGSize(width: 0, height: 4)
-        settingsButton.accessibilityLabel = "Impostazioni server"
-        settingsButton.addTarget(self, action: #selector(showServerSettings), for: .touchUpInside)
-        settingsButton.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(settingsButton)
-
+    private func configureActivityIndicator() {
         activityIndicator.hidesWhenStopped = true
         activityIndicator.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(activityIndicator)
 
         NSLayoutConstraint.activate([
-            settingsButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -18),
-            settingsButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -18),
-            settingsButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 48),
             activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
         ])
     }
 
-    private func configureOfflineButton() {
-        var configuration = UIButton.Configuration.filled()
-        configuration.image = UIImage(systemName: "icloud.slash.fill")
-        configuration.imagePadding = 7
-        configuration.baseForegroundColor = UIColor(red: 0.251, green: 0.325, blue: 0.416, alpha: 1)
-        configuration.baseBackgroundColor = UIColor(white: 1, alpha: 0.96)
-        configuration.cornerStyle = .capsule
-        configuration.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
-        offlineButton.configuration = configuration
-        offlineButton.layer.shadowColor = UIColor.black.cgColor
-        offlineButton.layer.shadowOpacity = 0.16
-        offlineButton.layer.shadowRadius = 10
-        offlineButton.layer.shadowOffset = CGSize(width: 0, height: 4)
-        offlineButton.accessibilityLabel = "Registrazione candidato offline"
-        offlineButton.addTarget(self, action: #selector(showOfflineCapture), for: .touchUpInside)
-        offlineButton.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(offlineButton)
-
-        NSLayoutConstraint.activate([
-            offlineButton.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 18),
-            offlineButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -18),
-            offlineButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 48),
-        ])
-    }
-
-    private func updateOfflineButton(count: Int = OfflineOperationStore.shared.count) {
-        offlineButton.configuration?.title = count > 0 ? "Offline · \(count)" : "Offline"
-        offlineButton.configuration?.baseBackgroundColor = count > 0
-            ? UIColor(red: 1.0, green: 0.922, blue: 0.678, alpha: 0.98)
-            : UIColor(white: 1, alpha: 0.96)
-    }
-
-    @objc private func showOfflineCapture() {
-        let controller = OfflineCaptureViewController()
-        controller.onSaved = { [weak self] in
-            self?.updateOfflineButton()
-            self?.attemptOfflineSync()
-        }
-        let navigation = UINavigationController(rootViewController: controller)
-        navigation.modalPresentationStyle = .formSheet
-        present(navigation, animated: true)
-    }
-
-    private func attemptOfflineSync() {
-        NativeOfflineSync.shared.synchronize(serverURL: ServerPreferences.savedURL) { [weak self] count in
-            self?.updateOfflineButton(count: count)
-        }
-    }
-
-    @objc private func showServerSettings() {
+    fileprivate func showServerSettings() {
         let alert = UIAlertController(
             title: "Server Candidature Hub",
             message: "Inserisci l’indirizzo del server, ad esempio 192.168.0.37:3031.",
@@ -386,7 +346,6 @@ private final class ServerContainerViewController: UIViewController {
     }
 
     private func testAndConnect(to url: URL) {
-        settingsButton.isEnabled = false
         activityIndicator.startAnimating()
         var request = URLRequest(url: url.appendingPathComponent("login"))
         request.timeoutInterval = 10
@@ -395,16 +354,12 @@ private final class ServerContainerViewController: UIViewController {
         URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
             DispatchQueue.main.async {
                 guard let self else { return }
-                self.settingsButton.isEnabled = true
                 self.activityIndicator.stopAnimating()
 
                 if error == nil, let http = response as? HTTPURLResponse, (200...499).contains(http.statusCode) {
                     ServerPreferences.save(url)
                     self.installBridge(for: url)
-                    self.view.bringSubviewToFront(self.settingsButton)
-                    self.view.bringSubviewToFront(self.offlineButton)
                     self.view.bringSubviewToFront(self.activityIndicator)
-                    self.attemptOfflineSync()
                 } else {
                     self.showConnectionError(for: url, error: error)
                 }
@@ -425,9 +380,7 @@ private final class ServerContainerViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "Salva comunque", style: .default) { [weak self] _ in
             ServerPreferences.save(url)
             self?.installBridge(for: url)
-            if let button = self?.settingsButton { self?.view.bringSubviewToFront(button) }
-            if let button = self?.offlineButton { self?.view.bringSubviewToFront(button) }
-            self?.attemptOfflineSync()
+            if let indicator = self?.activityIndicator { self?.view.bringSubviewToFront(indicator) }
         })
         present(alert, animated: true)
     }
